@@ -185,9 +185,7 @@ export default function HomeScreen() {
     <View style={styles.root}>
       <StatusBar barStyle="light-content" />
       <SafeAreaView style={styles.safeArea} edges={['top']}>
-        {/* ---------- TOP MENU ---------- */}
         <View style={styles.header}>
-          {/* ลายข้าวหลามตัดจางๆ ด้านหลัง */}
           <ThaiPatternOverlay />
 
           <View style={styles.headerTopRow}>
@@ -206,7 +204,7 @@ export default function HomeScreen() {
                 <View style={styles.notificationDot} />
               </Pressable>
               <View style={styles.avatar}>
-                <Text style={styles.avatarText}>MK</Text>
+                <Text style={styles.avatarText}>KL</Text>
               </View>
             </View>
           </View>
