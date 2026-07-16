@@ -1,0 +1,46 @@
+[
+    {
+        "id": "TS-001",
+        "name": "Thai Silk Tote — Blue Pikul Bloom",
+        "stock": 12,
+        "stock_text": "12 in stock",
+        "category": "Tote",
+        "location_count": 3,
+        "location_text": "3 stores",
+        "badge_status": "Active",
+        "image_url": "https://raw.githubusercontent.com/Chamaiporn-K/MyProfileAppChamaiporn/refs/heads/main/assets/images/Thai_Silk%20Tote_Blue_Pikul_Bloom.png"
+    },
+    {
+        "id": "TS-002",
+        "name": "Thai Silk Heritage Clutch — Floral Lace",
+        "stock": 10,
+        "stock_text": "10 in stock",
+        "category": "Heritage Clutch",
+        "location_count": 4,
+        "location_text": "4 stores",
+        "badge_status": "Active",
+        "image_url": "https://raw.githubusercontent.com/Chamaiporn-K/MyProfileAppChamaiporn/refs/heads/main/assets/images/Thai_Silk_Heritage_Clutch_Floral_Lace.png"
+    },
+    {
+        "id": "TS-003",
+        "name": "Thai Silk Structured Handbag — Pearl Blush",
+        "stock": 1,
+        "stock_text": "1 in stock",
+        "category": "Structured Handbag",
+        "location_count": 1,
+        "location_text": "1 stores",
+        "badge_status": "Low in stock",
+        "image_url": "https://raw.githubusercontent.com/Chamaiporn-K/MyProfileAppChamaiporn/refs/heads/main/assets/images/Thai_Silk_Structured_Handbag_Pearl_Blush.png"
+    },
+    {
+        "id": "TS-004",
+        "name": "Thai Silk Patchwork Luggage — Ancient Khit Pattern",
+        "stock": 1,
+        "stock_text": "1 in stock",
+        "category": "Patchwork Luggage",
+        "location_count": 1,
+        "location_text": "1 stores",
+        "badge_status": "Low in stock",
+        "image_url": "https://raw.githubusercontent.com/Chamaiporn-K/MyProfileAppChamaiporn/refs/heads/main/assets/images/Thai_Silk_Patchwork_Luggage_Ancient_Khit_Pattern.png"
+    }
+]

@@ -1,5 +1,6 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react'; // 🔥 1. เพิ่ม useEffect เข้ามา
 import {
+  ActivityIndicator,
   Animated,
   Dimensions,
   FlatList,
@@ -11,74 +12,39 @@ import {
   Text,
   TextInput,
   View,
-  type ImageSourcePropType,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-type Status = 'In Stock' | 'Low Stock' | 'Out of Stock';
-type Category = 'Tote' | 'Clutch' | 'Handbag' | 'Luggage';
+// 1. แก้ไขประเภทของ Status และ Category ให้ตรงกับใน JSON ตัวใหม่ของคุณ
+type Status = 'Active' | 'Low in stock'; 
+type Category = 'Tote' | 'Heritage Clutch' | 'Structured Handbag' | 'Patchwork Luggage';
 
+// 2. ปรับโครงสร้าง Type Product ให้มี Key ตรงตามข้อมูล JSON
 type Product = {
   id: string;
   name: string;
   category: Category;
   stock: number;
-  location: string;
-  status: Status;
-  image: ImageSourcePropType;
+  stock_text: string;      // เพิ่มเข้ามาตาม JSON
+  location_count: number;  // เพิ่มเข้ามาตาม JSON
+  location_text: string;    // เปลี่ยนจาก location เดิม
+  badge_status: Status;    // เปลี่ยนจาก status เดิม
+  image_url: string;
 };
 
+// 3. ปรับคีย์ของระบบสีหมวดหมู่ให้ตรงกับชื่อใหม่
 const CATEGORY_STYLE: Record<Category, { bg: string; fg: string }> = {
-  Tote: { bg: '#EAF2FB', fg: '#2F6FA6' },
-  Clutch: { bg: '#F6F1E8', fg: '#8A7141' },
-  Handbag: { bg: '#FBEFF1', fg: '#B15C74' },
-  Luggage: { bg: '#F7ECE4', fg: '#A15A2E' },
+  'Tote': { bg: '#EAF2FB', fg: '#2F6FA6' },
+  'Heritage Clutch': { bg: '#F6F1E8', fg: '#8A7141' },
+  'Structured Handbag': { bg: '#FBEFF1', fg: '#B15C74' },
+  'Patchwork Luggage': { bg: '#F7ECE4', fg: '#A15A2E' },
 };
 
+// 4. ปรับคีย์ของระบบสีปุ่มสถานะให้ตรงกับคำใหม่ ('Active' และ 'Low in stock')
 const STATUS_STYLE: Record<Status, { bg: string; fg: string }> = {
-  'In Stock': { bg: '#E4F5E8', fg: '#2F8F4E' },
-  'Low Stock': { bg: '#FDF1DA', fg: '#B4791E' },
-  'Out of Stock': { bg: '#FBE6E6', fg: '#C23B3B' },
+  'Active': { bg: '#E4F5E8', fg: '#2F8F4E' },       // สีเขียว
+  'Low in stock': { bg: '#FDF1DA', fg: '#B4791E' }, // สีส้ม/เหลือง
 };
-
-const PRODUCTS: Product[] = [
-  {
-    id: 'TS-001',
-    name: 'Thai Silk Tote — Blue Pikul Bloom',
-    category: 'Tote',
-    stock: 18,
-    location: 'Shelf A1',
-    status: 'In Stock',
-    image: require('../../assets/images/Thai_Silk Tote_Blue_Pikul_Bloom.png'),
-  },
-  {
-    id: 'TS-002',
-    name: 'Thai Silk Heritage Clutch — Floral Lace',
-    category: 'Clutch',
-    stock: 4,
-    location: 'Shelf B2',
-    status: 'Low Stock',
-    image: require('../../assets/images/Thai_Silk_Heritage_Clutch_Floral_Lace.png'),
-  },
-  {
-    id: 'TS-003',
-    name: 'Thai Silk Structured Handbag — Pearl Blush',
-    category: 'Handbag',
-    stock: 0,
-    location: 'Shelf C3',
-    status: 'Out of Stock',
-    image: require('../../assets/images/Thai_Silk_Structured_Handbag_Pearl_Blush.png'),
-  },
-  {
-    id: 'TS-004',
-    name: 'Thai Silk Patchwork Luggage — Ancient Khit Pattern',
-    category: 'Luggage',
-    stock: 25,
-    location: 'Warehouse D4',
-    status: 'In Stock',
-    image: require('../../assets/images/Thai_Silk_Patchwork_Luggage_Ancient_Khit_Pattern.png'),
-  },
-];
 
 const NAV_ITEMS = [
   { key: 'home', label: 'Home', emoji: '🏠' },
@@ -88,10 +54,8 @@ const NAV_ITEMS = [
 ] as const;
 
 const DRAWER_ITEMS = ['Home', 'Products', 'Categories', 'Stores', 'Finances', 'Settings'];
-
 const DRAWER_WIDTH = Math.min(280, Dimensions.get('window').width * 0.78);
 
-// ส่วนประกอบลายผ้าไทยข้าวหลามตัดแบบไม่ต้องพึ่งรูปภาพ
 function ThaiPatternOverlay() {
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="none">
@@ -106,17 +70,7 @@ function ThaiPatternOverlay() {
   );
 }
 
-function StatCard({
-  label,
-  value,
-  fg,
-  bg,
-}: {
-  label: string;
-  value: number;
-  fg: string;
-  bg: string;
-}) {
+function StatCard({ label, value, fg, bg }: { label: string; value: number; fg: string; bg: string }) {
   return (
     <View style={[styles.statCard, { backgroundColor: bg }]}>
       <Text style={[styles.statValue, { color: fg }]}>{value}</Text>
@@ -127,13 +81,12 @@ function StatCard({
 
 function ProductCard({ product }: { product: Product }) {
   const cat = CATEGORY_STYLE[product.category];
-  const status = STATUS_STYLE[product.status];
+  const status = STATUS_STYLE[product.badge_status]; // 🔹 เปลี่ยนจาก product.status เป็น badge_status
 
   return (
     <View style={styles.productCard}>
-      {/* ขยายรูปภาพเป็น 64x64 ให้มองเห็นลวดลายผ้าไหมชัดเจนขึ้น */}
-      <View style={[styles.productIcon, { backgroundColor: cat.bg }]}>
-        <Image source={product.image} style={styles.productImage} resizeMode="cover" />
+      <View style={[styles.productIcon, { backgroundColor: cat ? cat.bg : '#F1F5F9' }]}>
+        <Image source={{ uri: product.image_url }} style={styles.productImage} resizeMode="cover" />
       </View>
 
       <View style={{ flex: 1, justifyContent: 'space-between', height: 64 }}>
@@ -141,8 +94,10 @@ function ProductCard({ product }: { product: Product }) {
           <Text style={styles.productName} numberOfLines={1}>
             {product.name}
           </Text>
-          <View style={[styles.statusBadge, { backgroundColor: status.bg }]}>
-            <Text style={[styles.statusText, { color: status.fg }]}>{product.status}</Text>
+          <View style={[styles.statusBadge, { backgroundColor: status ? status.bg : '#E2E8F0' }]}>
+            <Text style={[styles.statusText, { color: status ? status.fg : '#64748B' }]}>
+              {product.badge_status} {/* 🔹 เปลี่ยนจาก product.status เป็น badge_status */}
+            </Text>
           </View>
         </View>
 
@@ -151,8 +106,10 @@ function ProductCard({ product }: { product: Product }) {
         </Text>
 
         <View style={styles.productBottomRow}>
-          <Text style={styles.productLocation}>📍 {product.location}</Text>
-          <Text style={styles.productStock}>{product.stock} units</Text>
+          {/* 🔹 เปลี่ยนจาก product.location เป็น product.location_text */}
+          <Text style={styles.productLocation}>📍 {product.location_text}</Text> 
+          {/* 🔹 เปลี่ยนจาก product.stock เป็น product.stock_text */}
+          <Text style={styles.productStock}>{product.stock_text}</Text> 
         </View>
       </View>
     </View>
@@ -160,11 +117,35 @@ function ProductCard({ product }: { product: Product }) {
 }
 
 export default function HomeScreen() {
+  // 🔥 4. สร้าง State ขึ้นมาเก็บข้อมูลแทนการใช้ตัวแปรแบบ Static
+  const [products, setProducts] = useState<Product[]>([]);
+  const [isLoading, setIsLoading] = useState<boolean>(true); // สร้างสถานะการโหลดข้อมูล
+
   const [activeTab, setActiveTab] = useState<string>('home');
   const [drawerVisible, setDrawerVisible] = useState(false);
   const slideAnim = useRef(new Animated.Value(-DRAWER_WIDTH)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  const lowStockCount = PRODUCTS.filter((p) => p.status !== 'In Stock').length;
+
+  // 🔥 5. ใช้ useEffect วิ่งไปดึงข้อมูลจาก GitHub ทันทีเมื่อหน้าจอนี้ถูกเปิด
+  useEffect(() => {
+    // ⚠️ อย่าลืมเช็คให้ชัวร์ว่าชื่อไฟล์ใน GitHub พิมพ์ตรงกับตรงนี้นะครับ
+    const GITHUB_RAW_URL = 'https://raw.githubusercontent.com/Chamaiporn-K/MyProfileAppChamaiporn/refs/heads/main/products.json';
+
+    fetch(GITHUB_RAW_URL)
+      .then((response) => response.json())
+      .then((data) => {
+        setProducts(data); // เก็บข้อมูลที่ได้ลงใน State
+        setIsLoading(false); // ปิดตัวหมุนโหลด
+      })
+      .catch((error) => {
+        console.error('Error fetching data:', error);
+        setIsLoading(false);
+      });
+  }, []);
+
+  // คำนวณจำนวนสต็อกต่ำโดยอิงจากตัวแปร State ตัวใหม่ (products)
+  // เปลี่ยนจากเช็ก p.status เป็น p.badge_status เพื่อตรวจหาชิ้นที่สต็อกเริ่มต่ำ
+      const lowStockCount = products.filter((p) => p.badge_status !== 'Active').length;
 
   function openDrawer() {
     setDrawerVisible(true);
@@ -219,7 +200,8 @@ export default function HomeScreen() {
           </View>
 
           <View style={styles.statRow}>
-            <StatCard label="Total items" value={PRODUCTS.length} fg="#1B2A4A" bg="#FFFFFF" />
+            {/* 🔥 เปลี่ยนจาก PRODUCTS.length มาใช้ products.length จากตัวแปรดึงออนไลน์ */}
+            <StatCard label="Total items" value={products.length} fg="#1B2A4A" bg="#FFFFFF" />
             <StatCard label="Needs attention" value={lowStockCount} fg="#B4791E" bg="#FDF1DA" />
           </View>
         </View>
@@ -232,13 +214,21 @@ export default function HomeScreen() {
           </Pressable>
         </View>
 
-        <FlatList
-          data={PRODUCTS}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item }) => <ProductCard product={item} />}
-          contentContainerStyle={styles.listContent}
-          ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
-        />
+        {/* 🔥 เพิ่มเงื่อนไขเช็คว่าถ้ายังโหลดไม่เสร็จให้ขึ้นไอคอนโหลด ถ้าเสร็จแล้วค่อยโชว์ FlatList */}
+        {isLoading ? (
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+            <ActivityIndicator size="large" color="#1B2A4A" />
+            <Text style={{ marginTop: 8, color: '#64748B' }}>Loading products from GitHub...</Text>
+          </View>
+        ) : (
+          <FlatList
+            data={products} // 🔥 เปลี่ยนแหล่งข้อมูลจาก PRODUCTS มาเป็น products สเตท
+            keyExtractor={(item) => item.id}
+            renderItem={({ item }) => <ProductCard product={item} />}
+            contentContainerStyle={styles.listContent}
+            ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
+          />
+        )}
 
         {/* ---------- BOTTOM MENU ---------- */}
         <View style={styles.bottomNav}>
