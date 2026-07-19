@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'; // 🔥 1. เพิ่ม useEffect เข้ามา
+import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
@@ -15,24 +15,24 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-// 1. แก้ไขประเภทของ Status และ Category ให้ตรงกับใน JSON ตัวใหม่ของคุณ
+
 type Status = 'Active' | 'Low in stock'; 
 type Category = 'Tote' | 'Heritage Clutch' | 'Structured Handbag' | 'Patchwork Luggage';
 
-// 2. ปรับโครงสร้าง Type Product ให้มี Key ตรงตามข้อมูล JSON
+
 type Product = {
   id: string;
   name: string;
   category: Category;
   stock: number;
-  stock_text: string;      // เพิ่มเข้ามาตาม JSON
-  location_count: number;  // เพิ่มเข้ามาตาม JSON
-  location_text: string;    // เปลี่ยนจาก location เดิม
-  badge_status: Status;    // เปลี่ยนจาก status เดิม
+  stock_text: string;      
+  location_count: number;  
+  location_text: string;   
+  badge_status: Status;    
   image_url: string;
 };
 
-// 3. ปรับคีย์ของระบบสีหมวดหมู่ให้ตรงกับชื่อใหม่
+
 const CATEGORY_STYLE: Record<Category, { bg: string; fg: string }> = {
   'Tote': { bg: '#EAF2FB', fg: '#2F6FA6' },
   'Heritage Clutch': { bg: '#F6F1E8', fg: '#8A7141' },
@@ -40,10 +40,10 @@ const CATEGORY_STYLE: Record<Category, { bg: string; fg: string }> = {
   'Patchwork Luggage': { bg: '#F7ECE4', fg: '#A15A2E' },
 };
 
-// 4. ปรับคีย์ของระบบสีปุ่มสถานะให้ตรงกับคำใหม่ ('Active' และ 'Low in stock')
+
 const STATUS_STYLE: Record<Status, { bg: string; fg: string }> = {
-  'Active': { bg: '#E4F5E8', fg: '#2F8F4E' },       // สีเขียว
-  'Low in stock': { bg: '#FDF1DA', fg: '#B4791E' }, // สีส้ม/เหลือง
+  'Active': { bg: '#E4F5E8', fg: '#2F8F4E' },       
+  'Low in stock': { bg: '#FDF1DA', fg: '#B4791E' },
 };
 
 const NAV_ITEMS = [
@@ -81,7 +81,7 @@ function StatCard({ label, value, fg, bg }: { label: string; value: number; fg: 
 
 function ProductCard({ product }: { product: Product }) {
   const cat = CATEGORY_STYLE[product.category];
-  const status = STATUS_STYLE[product.badge_status]; // 🔹 เปลี่ยนจาก product.status เป็น badge_status
+  const status = STATUS_STYLE[product.badge_status]; 
 
   return (
     <View style={styles.productCard}>
@@ -106,9 +106,7 @@ function ProductCard({ product }: { product: Product }) {
         </Text>
 
         <View style={styles.productBottomRow}>
-          {/* 🔹 เปลี่ยนจาก product.location เป็น product.location_text */}
           <Text style={styles.productLocation}>📍 {product.location_text}</Text> 
-          {/* 🔹 เปลี่ยนจาก product.stock เป็น product.stock_text */}
           <Text style={styles.productStock}>{product.stock_text}</Text> 
         </View>
       </View>
@@ -117,25 +115,24 @@ function ProductCard({ product }: { product: Product }) {
 }
 
 export default function HomeScreen() {
-  // 🔥 4. สร้าง State ขึ้นมาเก็บข้อมูลแทนการใช้ตัวแปรแบบ Static
+
   const [products, setProducts] = useState<Product[]>([]);
-  const [isLoading, setIsLoading] = useState<boolean>(true); // สร้างสถานะการโหลดข้อมูล
+  const [isLoading, setIsLoading] = useState<boolean>(true);
 
   const [activeTab, setActiveTab] = useState<string>('home');
   const [drawerVisible, setDrawerVisible] = useState(false);
   const slideAnim = useRef(new Animated.Value(-DRAWER_WIDTH)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
-  // 🔥 5. ใช้ useEffect วิ่งไปดึงข้อมูลจาก GitHub ทันทีเมื่อหน้าจอนี้ถูกเปิด
+
   useEffect(() => {
-    // ⚠️ อย่าลืมเช็คให้ชัวร์ว่าชื่อไฟล์ใน GitHub พิมพ์ตรงกับตรงนี้นะครับ
     const GITHUB_RAW_URL = 'https://raw.githubusercontent.com/Chamaiporn-K/MyProfileAppChamaiporn/refs/heads/main/products.json';
 
     fetch(GITHUB_RAW_URL)
       .then((response) => response.json())
       .then((data) => {
-        setProducts(data); // เก็บข้อมูลที่ได้ลงใน State
-        setIsLoading(false); // ปิดตัวหมุนโหลด
+        setProducts(data); 
+        setIsLoading(false);
       })
       .catch((error) => {
         console.error('Error fetching data:', error);
@@ -143,8 +140,6 @@ export default function HomeScreen() {
       });
   }, []);
 
-  // คำนวณจำนวนสต็อกต่ำโดยอิงจากตัวแปร State ตัวใหม่ (products)
-  // เปลี่ยนจากเช็ก p.status เป็น p.badge_status เพื่อตรวจหาชิ้นที่สต็อกเริ่มต่ำ
       const lowStockCount = products.filter((p) => p.badge_status !== 'Active').length;
 
   function openDrawer() {
@@ -200,13 +195,11 @@ export default function HomeScreen() {
           </View>
 
           <View style={styles.statRow}>
-            {/* 🔥 เปลี่ยนจาก PRODUCTS.length มาใช้ products.length จากตัวแปรดึงออนไลน์ */}
             <StatCard label="Total items" value={products.length} fg="#1B2A4A" bg="#FFFFFF" />
             <StatCard label="Needs attention" value={lowStockCount} fg="#B4791E" bg="#FDF1DA" />
           </View>
         </View>
 
-        {/* ---------- PRODUCT SECTION ---------- */}
         <View style={styles.listHeaderRow}>
           <Text style={styles.listTitle}>Your Products</Text>
           <Pressable>
@@ -214,7 +207,6 @@ export default function HomeScreen() {
           </Pressable>
         </View>
 
-        {/* 🔥 เพิ่มเงื่อนไขเช็คว่าถ้ายังโหลดไม่เสร็จให้ขึ้นไอคอนโหลด ถ้าเสร็จแล้วค่อยโชว์ FlatList */}
         {isLoading ? (
           <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
             <ActivityIndicator size="large" color="#1B2A4A" />
@@ -222,7 +214,7 @@ export default function HomeScreen() {
           </View>
         ) : (
           <FlatList
-            data={products} // 🔥 เปลี่ยนแหล่งข้อมูลจาก PRODUCTS มาเป็น products สเตท
+            data={products} 
             keyExtractor={(item) => item.id}
             renderItem={({ item }) => <ProductCard product={item} />}
             contentContainerStyle={styles.listContent}
@@ -230,7 +222,6 @@ export default function HomeScreen() {
           />
         )}
 
-        {/* ---------- BOTTOM MENU ---------- */}
         <View style={styles.bottomNav}>
           {NAV_ITEMS.map(({ key, label, emoji }) => {
             const isActive = activeTab === key;
@@ -248,7 +239,6 @@ export default function HomeScreen() {
         </View>
       </SafeAreaView>
 
-      {/* ---------- SIDE DRAWER ---------- */}
       <Modal visible={drawerVisible} transparent animationType="none" onRequestClose={closeDrawer}>
         <View style={StyleSheet.absoluteFill}>
           <Animated.View style={[styles.backdrop, { opacity: fadeAnim }]}>
@@ -292,7 +282,7 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: '#FAFAFB', // ปรับพื้นหลังแอปให้อมเทาอ่อนลงนิดนึงเพื่อให้ Card สีขาวดูลอยเด่นขึ้น
+    backgroundColor: '#FAFAFB', 
   },
   safeArea: {
     flex: 1,
@@ -304,7 +294,7 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
     borderBottomLeftRadius: 24,
     borderBottomRightRadius: 24,
-    overflow: 'hidden', // ล็อคให้ลายข้าวหลามตัดไม่ทะลุขอบโค้ง
+    overflow: 'hidden', 
     position: 'relative',
   },
   patternRow: {
@@ -312,7 +302,7 @@ const styles = StyleSheet.create({
     width: 45,
     height: 45,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.05)', // ลายจางมากๆ สไตล์ลักชูรี
+    borderColor: 'rgba(255, 255, 255, 0.05)', 
     transform: [{ rotate: '45deg' }],
   },
   headerTopRow: {
@@ -437,7 +427,7 @@ const styles = StyleSheet.create({
   productCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 16, // เพิ่มช่องว่างระหว่างรูปกับข้อความให้ดูโปร่งขึ้น
+    gap: 16, 
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
     padding: 12,
@@ -450,8 +440,8 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   productIcon: {
-    width: 64, // ขยายจาก 52 เป็น 64
-    height: 64, // ขยายจาก 52 เป็น 64
+    width: 64,
+    height: 64, 
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
