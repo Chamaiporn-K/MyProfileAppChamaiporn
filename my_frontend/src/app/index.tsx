@@ -14,9 +14,13 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import AddProductScreen from './add';
+import CategoriesScreen from './categories';
+import ProductsScreen from './products';
+import { apiCall } from '../lib/api';
 
 
-type Status = 'Active' | 'Low in stock'; 
+type Status = 'Active' | 'Low in stock' | 'Out of Stock';
 type Category = 'Tote' | 'Heritage Clutch' | 'Structured Handbag' | 'Patchwork Luggage';
 
 
@@ -44,6 +48,7 @@ const CATEGORY_STYLE: Record<Category, { bg: string; fg: string }> = {
 const STATUS_STYLE: Record<Status, { bg: string; fg: string }> = {
   'Active': { bg: '#E4F5E8', fg: '#2F8F4E' },       
   'Low in stock': { bg: '#FDF1DA', fg: '#B4791E' },
+  'Out of Stock': { bg: '#FDECEC', fg: '#C53030' },
 };
 
 const NAV_ITEMS = [
@@ -82,6 +87,11 @@ function StatCard({ label, value, fg, bg }: { label: string; value: number; fg: 
 function ProductCard({ product }: { product: Product }) {
   const cat = CATEGORY_STYLE[product.category];
   const status = STATUS_STYLE[product.badge_status]; 
+  const displayStatus = product.badge_status === 'Active'
+    ? 'In Stock'
+    : product.badge_status === 'Low in stock'
+    ? 'Low Stock'
+    : product.badge_status;
 
   return (
     <View style={styles.productCard}>
@@ -96,7 +106,7 @@ function ProductCard({ product }: { product: Product }) {
           </Text>
           <View style={[styles.statusBadge, { backgroundColor: status ? status.bg : '#E2E8F0' }]}>
             <Text style={[styles.statusText, { color: status ? status.fg : '#64748B' }]}>
-              {product.badge_status} {/* 🔹 เปลี่ยนจาก product.status เป็น badge_status */}
+              {displayStatus}
             </Text>
           </View>
         </View>
@@ -118,6 +128,7 @@ export default function HomeScreen() {
 
   const [products, setProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
   const [activeTab, setActiveTab] = useState<string>('home');
   const [drawerVisible, setDrawerVisible] = useState(false);
@@ -126,16 +137,14 @@ export default function HomeScreen() {
 
 
   useEffect(() => {
-    const GITHUB_RAW_URL = 'https://raw.githubusercontent.com/Chamaiporn-K/MyProfileAppChamaiporn/refs/heads/main/products.json';
-
-    fetch(GITHUB_RAW_URL)
-      .then((response) => response.json())
+    apiCall('/products')
       .then((data) => {
-        setProducts(data); 
+        setProducts(data);
         setIsLoading(false);
       })
       .catch((error) => {
         console.error('Error fetching data:', error);
+        setFetchError(error?.message || 'Unable to load products from backend.');
         setIsLoading(false);
       });
   }, []);
@@ -207,10 +216,25 @@ export default function HomeScreen() {
           </Pressable>
         </View>
 
-        {isLoading ? (
+        {/* Simple tab routing using activeTab state */}
+        {activeTab === 'add' ? (
+          <AddProductScreen />
+        ) : activeTab === 'categories' ? (
+          <CategoriesScreen />
+        ) : activeTab === 'products' ? (
+          <ProductsScreen
+            products={products}
+            isLoading={isLoading}
+            renderItem={({ item }: any) => <ProductCard product={item} />}
+          />
+        ) : isLoading ? (
           <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
             <ActivityIndicator size="large" color="#1B2A4A" />
-            <Text style={{ marginTop: 8, color: '#64748B' }}>Loading products from GitHub...</Text>
+            <Text style={{ marginTop: 8, color: '#64748B' }}>Loading products...</Text>
+          </View>
+        ) : fetchError ? (
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+            <Text style={{ marginTop: 8, color: '#C53030' }}>{fetchError}</Text>
           </View>
         ) : (
           <FlatList
