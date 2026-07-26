@@ -22,42 +22,8 @@ const pool = mysql.createPool({
   timezone: "+07:00"
 });
 
-let productsTableName = null;
-
-async function discoverProductsTable() {
-  if (productsTableName) return productsTableName;
-
-  const schema = process.env.DB_NAME;
-  const candidateNames = ['Products', 'products', 'Product', 'product'];
-
-  try {
-    const [rows] = await pool.query(
-      `SELECT TABLE_NAME FROM information_schema.tables WHERE table_schema = ? AND LOWER(TABLE_NAME) IN (?, ?, ?, ?)`,
-      [schema, ...candidateNames.map((name) => name.toLowerCase())]
-    );
-
-    if (rows.length > 0) {
-      productsTableName = rows[0].TABLE_NAME;
-      console.log('Detected products table:', productsTableName);
-      return productsTableName;
-    }
-
-    const [fallbackRows] = await pool.query(
-      `SELECT TABLE_NAME FROM information_schema.tables WHERE table_schema = ? AND TABLE_NAME LIKE ? LIMIT 1`,
-      [schema, '%product%']
-    );
-
-    if (fallbackRows.length > 0) {
-      productsTableName = fallbackRows[0].TABLE_NAME;
-      console.log('Detected products-like table:', productsTableName);
-      return productsTableName;
-    }
-  } catch (err) {
-    console.error('Products table discovery failed:', err.message || err);
-  }
-
-  return null;
-}
+// Linux MySQL is case-sensitive — actual table name is `Products`
+const PRODUCTS_TABLE = 'Products';
 
 (async function testMySQL(){
   try{
@@ -74,12 +40,20 @@ async function discoverProductsTable() {
 // Get products
 app.get('/api/products', async(req,res)=>{
   try{
-    const table = await discoverProductsTable();
-    if (!table) {
-      return res.status(500).json({ error: 'Products table not found in database.' });
-    }
-
-    const [rows] = await pool.query(`SELECT * FROM \`${table}\` ORDER BY LastUpdate DESC`);
+    const [rows] = await pool.query(
+      `SELECT
+        Productcode AS id,
+        Name AS name,
+        Category AS category,
+        Stock AS stock,
+        CONCAT(Stock, ' in stock') AS stock_text,
+        1 AS location_count,
+        IFNULL(Location, '') AS location_text,
+        IFNULL(Status, 'Active') AS badge_status,
+        IFNULL(image, '') AS image_url
+      FROM \`${PRODUCTS_TABLE}\`
+      ORDER BY LastUpdate DESC`
+    );
     res.json(rows);
   }catch(e){
     console.error('Products Error:', e.message || e);
@@ -90,13 +64,8 @@ app.get('/api/products', async(req,res)=>{
 // Get categories (distinct categories with counts)
 app.get('/api/categories', async (req, res) => {
   try {
-    const table = await discoverProductsTable();
-    if (!table) {
-      return res.status(500).json({ error: 'Products table not found in database.' });
-    }
-
     const [rows] = await pool.query(
-      `SELECT Category AS id, Category AS name, COUNT(*) AS count FROM \`${table}\` GROUP BY Category ORDER BY count DESC`
+      `SELECT Category AS id, Category AS name, COUNT(*) AS count FROM \`${PRODUCTS_TABLE}\` GROUP BY Category ORDER BY count DESC`
     );
     res.json(rows);
   } catch (err) {
@@ -121,22 +90,8 @@ app.post('/api/products', async (req, res) => {
 
     if (!id || !name) return res.status(400).json({ error: 'Missing id or name' });
 
-    const table = await discoverProductsTable();
-    if (!table) {
-      return res.status(500).json({ error: 'Products table not found in database.' });
-    }
-
-    // Map frontend field names to DB columns
-    const Productcode = id;
-    const Name = name;
-    const Stock = Number(stock) || 0;
-    const Category = category;
-    const Location = location_text;
-    const Status = badge_status;
-    const image = image_url;
-
-    const sql = `INSERT INTO \`${table}\` (Productcode, Name, Stock, Category, Location, Status, image, LastUpdate) VALUES (?, ?, ?, ?, ?, ?, ?, NOW())`;
-    await pool.query(sql, [Productcode, Name, Stock, Category, Location, Status, image]);
+    const sql = `INSERT INTO \`${PRODUCTS_TABLE}\` (Productcode, Name, Stock, Category, Location, Status, image, LastUpdate) VALUES (?, ?, ?, ?, ?, ?, ?, NOW())`;
+    await pool.query(sql, [id, name, Number(stock) || 0, category, location_text, badge_status, image_url]);
 
     res.json({ success: true });
   } catch (err) {
