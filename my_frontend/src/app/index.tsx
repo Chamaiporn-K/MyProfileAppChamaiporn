@@ -139,7 +139,20 @@ export default function HomeScreen() {
   useEffect(() => {
     apiCall('/products')
       .then((data) => {
-        setProducts(data);
+        const rows = Array.isArray(data) ? data : [];
+        // Map DB columns (Productcode, Name, ...) to frontend Product shape
+        const mapped: Product[] = rows.map((row: any) => ({
+          id: String(row.id ?? row.Productcode ?? ''),
+          name: row.name ?? row.Name ?? '',
+          category: row.category ?? row.Category ?? 'Tote',
+          stock: Number(row.stock ?? row.Stock ?? 0),
+          stock_text: row.stock_text ?? `${row.Stock ?? row.stock ?? 0} in stock`,
+          location_count: Number(row.location_count ?? 1),
+          location_text: row.location_text ?? row.Location ?? '',
+          badge_status: row.badge_status ?? row.Status ?? 'Active',
+          image_url: row.image_url ?? row.image ?? '',
+        }));
+        setProducts(mapped);
         setIsLoading(false);
       })
       .catch((error) => {
