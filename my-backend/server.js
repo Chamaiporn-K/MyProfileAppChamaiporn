@@ -7,7 +7,7 @@ const app = express();
 const port = process.env.PORT || 3012;
 
 app.use(cors());
-app.use(express.json({ limit: '5mb' }));
+app.use(express.json({ limit: '15mb' }));
 
 // MySQL Connection
 const pool = mysql.createPool({
@@ -25,6 +25,10 @@ const pool = mysql.createPool({
 // Linux MySQL is case-sensitive — actual table name is `Products`
 const PRODUCTS_TABLE = 'Products';
 
+function isUnknownColumn(err) {
+  return err && (err.code === 'ER_BAD_FIELD_ERROR' || err.errno === 1054);
+}
+
 (async function testMySQL(){
   try{
     const conn = await pool.getConnection();
@@ -40,8 +44,21 @@ const PRODUCTS_TABLE = 'Products';
 // Get products
 app.get('/api/products', async(req,res)=>{
   try{
-    const [rows] = await pool.query(
-      `SELECT
+    const selectWithLink = `SELECT
+        Productcode AS id,
+        Name AS name,
+        Category AS category,
+        Stock AS stock,
+        CONCAT(Stock, ' in stock') AS stock_text,
+        1 AS location_count,
+        IFNULL(Location, '') AS location_text,
+        IFNULL(Status, 'Active') AS badge_status,
+        IFNULL(image, '') AS image_url,
+        IFNULL(ProductLink, '') AS product_link
+      FROM \`${PRODUCTS_TABLE}\`
+      ORDER BY LastUpdate DESC`;
+
+    const selectLegacy = `SELECT
         Productcode AS id,
         Name AS name,
         Category AS category,
@@ -52,8 +69,16 @@ app.get('/api/products', async(req,res)=>{
         IFNULL(Status, 'Active') AS badge_status,
         IFNULL(image, '') AS image_url
       FROM \`${PRODUCTS_TABLE}\`
-      ORDER BY LastUpdate DESC`
-    );
+      ORDER BY LastUpdate DESC`;
+
+    let rows;
+    try {
+      [rows] = await pool.query(selectWithLink);
+    } catch (e) {
+      if (!isUnknownColumn(e)) throw e;
+      [rows] = await pool.query(selectLegacy);
+      rows = rows.map((row) => ({ ...row, product_link: '' }));
+    }
     res.json(rows);
   }catch(e){
     console.error('Products Error:', e.message || e);
@@ -86,12 +111,22 @@ app.post('/api/products', async (req, res) => {
       location_text = null,
       badge_status = null,
       image_url = null,
+      product_link = null,
     } = body;
 
     if (!id || !name) return res.status(400).json({ error: 'Missing id or name' });
 
-    const sql = `INSERT INTO \`${PRODUCTS_TABLE}\` (Productcode, Name, Stock, Category, Location, Status, image, LastUpdate) VALUES (?, ?, ?, ?, ?, ?, ?, NOW())`;
-    await pool.query(sql, [id, name, Number(stock) || 0, category, location_text, badge_status, image_url]);
+    const sqlWithLink = `INSERT INTO \`${PRODUCTS_TABLE}\` (Productcode, Name, Stock, Category, Location, Status, image, ProductLink, LastUpdate) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())`;
+    const sqlLegacy = `INSERT INTO \`${PRODUCTS_TABLE}\` (Productcode, Name, Stock, Category, Location, Status, image, LastUpdate) VALUES (?, ?, ?, ?, ?, ?, ?, NOW())`;
+    const paramsWithLink = [id, name, Number(stock) || 0, category, location_text, badge_status, image_url, product_link];
+    const paramsLegacy = [id, name, Number(stock) || 0, category, location_text, badge_status, image_url];
+
+    try {
+      await pool.query(sqlWithLink, paramsWithLink);
+    } catch (insertErr) {
+      if (!isUnknownColumn(insertErr)) throw insertErr;
+      await pool.query(sqlLegacy, paramsLegacy);
+    }
 
     res.json({ success: true });
   } catch (err) {
