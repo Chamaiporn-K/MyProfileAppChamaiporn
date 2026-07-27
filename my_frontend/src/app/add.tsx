@@ -25,7 +25,6 @@ export default function AddProductScreen() {
   const [stock, setStock] = useState('0');
   const [location, setLocation] = useState('');
   const [imageUrl, setImageUrl] = useState('');
-  const [productLink, setProductLink] = useState('');
   const [status, setStatus] = useState('Available');
   const [imageSource, setImageSource] = useState<'none' | 'url' | 'file'>('none');
 
@@ -73,12 +72,6 @@ export default function AddProductScreen() {
       return;
     }
 
-    const trimmedLink = productLink.trim();
-    if (trimmedLink && !isHttpUrl(trimmedLink)) {
-      Alert.alert('Validation', 'Product link must start with http:// or https://');
-      return;
-    }
-
     const trimmedImage = imageUrl.trim();
     if (trimmedImage && imageSource === 'url' && !isHttpUrl(trimmedImage) && !trimmedImage.startsWith('data:')) {
       Alert.alert('Validation', 'Image link must be a valid URL or choose a file from your device.');
@@ -93,7 +86,6 @@ export default function AddProductScreen() {
       location_text: location,
       badge_status: status,
       image_url: trimmedImage || null,
-      product_link: trimmedLink || null,
     };
 
     apiCall('/products', {
@@ -108,7 +100,6 @@ export default function AddProductScreen() {
           setStock('0');
           setLocation('');
           setImageUrl('');
-          setProductLink('');
           setImageSource('none');
           setStatus('Available');
           setCategory('Tote');
@@ -185,20 +176,6 @@ export default function AddProductScreen() {
           {imageSource === 'file' ? (
             <Text style={styles.hint}>Using uploaded image. Remove it to paste a link instead.</Text>
           ) : null}
-        </View>
-
-        <View style={styles.field}>
-          <Text style={styles.label}>Product link (optional)</Text>
-          <Text style={styles.hint}>Store page, catalog, or supplier URL</Text>
-          <TextInput
-            style={styles.input}
-            value={productLink}
-            onChangeText={setProductLink}
-            placeholder="https://..."
-            autoCapitalize="none"
-            autoCorrect={false}
-            keyboardType="url"
-          />
         </View>
 
         <View style={styles.field}>

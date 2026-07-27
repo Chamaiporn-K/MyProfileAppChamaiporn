@@ -21,25 +21,21 @@ import ProductsScreen from './products';
 import { apiCall } from '../lib/api';
 
 
-type Status = 'Active' | 'Low in stock' | 'Out of Stock';
-type Category = 'Tote' | 'Heritage Clutch' | 'Structured Handbag' | 'Patchwork Luggage';
-
-
 type Product = {
   id: string;
   name: string;
-  category: Category;
+  category: string;
   stock: number;
   stock_text: string;      
   location_count: number;  
   location_text: string;   
-  badge_status: Status;    
+  badge_status: string;    
   image_url: string;
   product_link?: string;
 };
 
 
-const CATEGORY_STYLE: Record<Category, { bg: string; fg: string }> = {
+const CATEGORY_STYLE: Record<string, { bg: string; fg: string }> = {
   'Tote': { bg: '#EAF2FB', fg: '#2F6FA6' },
   'Heritage Clutch': { bg: '#F6F1E8', fg: '#8A7141' },
   'Structured Handbag': { bg: '#FBEFF1', fg: '#B15C74' },
@@ -47,7 +43,7 @@ const CATEGORY_STYLE: Record<Category, { bg: string; fg: string }> = {
 };
 
 
-const STATUS_STYLE: Record<Status, { bg: string; fg: string }> = {
+const STATUS_STYLE: Record<string, { bg: string; fg: string }> = {
   'Active': { bg: '#E4F5E8', fg: '#2F8F4E' },       
   'Low in stock': { bg: '#FDF1DA', fg: '#B4791E' },
   'Out of Stock': { bg: '#FDECEC', fg: '#C53030' },
