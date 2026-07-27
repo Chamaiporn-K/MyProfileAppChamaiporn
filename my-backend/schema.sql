@@ -1,6 +1,9 @@
 -- Table already exists as `Products` — insert sample rows only
 -- Run in phpMyAdmin → database ip_std6730202092 → SQL
 
+-- Add product page / external link column (run once if missing)
+-- ALTER TABLE `Products` ADD COLUMN `ProductLink` VARCHAR(512) NULL DEFAULT NULL AFTER `image`;
+
 INSERT INTO `Products` (Productcode, Name, Stock, Category, Location, Status, image)
 VALUES
   ('SKU-001', 'Classic Tote', 12, 'Tote', 'Warehouse A', 'Active', NULL),

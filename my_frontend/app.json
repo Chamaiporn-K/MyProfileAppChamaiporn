@@ -24,6 +24,12 @@
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow access to your photos to add product images."
+        }
+      ],
       "expo-router",
       [
         "expo-splash-screen",

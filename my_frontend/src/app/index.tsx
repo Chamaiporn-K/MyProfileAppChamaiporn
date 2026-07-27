@@ -5,6 +5,7 @@ import {
   Dimensions,
   FlatList,
   Image,
+  Linking,
   Modal,
   Pressable,
   StatusBar,
@@ -34,6 +35,7 @@ type Product = {
   location_text: string;   
   badge_status: Status;    
   image_url: string;
+  product_link?: string;
 };
 
 
@@ -96,7 +98,11 @@ function ProductCard({ product }: { product: Product }) {
   return (
     <View style={styles.productCard}>
       <View style={[styles.productIcon, { backgroundColor: cat ? cat.bg : '#F1F5F9' }]}>
-        <Image source={{ uri: product.image_url }} style={styles.productImage} resizeMode="cover" />
+        {product.image_url ? (
+          <Image source={{ uri: product.image_url }} style={styles.productImage} resizeMode="cover" />
+        ) : (
+          <Text style={{ fontSize: 28 }}>📦</Text>
+        )}
       </View>
 
       <View style={{ flex: 1, justifyContent: 'space-between', height: 64 }}>
@@ -113,6 +119,17 @@ function ProductCard({ product }: { product: Product }) {
 
         <Text style={styles.productMeta}>
           {product.id} · {product.category}
+          {product.product_link ? (
+            <>
+              {' · '}
+              <Text
+                style={styles.productLink}
+                onPress={() => Linking.openURL(product.product_link!)}
+              >
+                Open link
+              </Text>
+            </>
+          ) : null}
         </Text>
 
         <View style={styles.productBottomRow}>
@@ -151,6 +168,7 @@ export default function HomeScreen() {
           location_text: row.location_text ?? row.Location ?? '',
           badge_status: row.badge_status ?? row.Status ?? 'Active',
           image_url: row.image_url ?? row.image ?? '',
+          product_link: row.product_link ?? '',
         }));
         setProducts(mapped);
         setIsLoading(false);
@@ -513,6 +531,11 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#94A3B8',
     marginTop: 1,
+  },
+  productLink: {
+    color: '#1B2A4A',
+    fontWeight: '600',
+    textDecorationLine: 'underline',
   },
   productBottomRow: {
     flexDirection: 'row',
