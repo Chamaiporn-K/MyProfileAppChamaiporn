@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AddProductScreen from './add';
+import EditProductScreen from './edit';
 import CategoriesScreen from './categories';
 import ProductsScreen from './products';
 import { apiCall } from '../lib/api';
@@ -82,7 +83,7 @@ function StatCard({ label, value, fg, bg }: { label: string; value: number; fg: 
   );
 }
 
-function ProductCard({ product }: { product: Product }) {
+function ProductCard({ product, onEdit }: { product: Product; onEdit?: (product: Product) => void }) {
   const cat = CATEGORY_STYLE[product.category];
   const status = STATUS_STYLE[product.badge_status]; 
   const displayStatus = product.badge_status === 'Active'
@@ -106,10 +107,17 @@ function ProductCard({ product }: { product: Product }) {
           <Text style={styles.productName} numberOfLines={1}>
             {product.name}
           </Text>
-          <View style={[styles.statusBadge, { backgroundColor: status ? status.bg : '#E2E8F0' }]}>
-            <Text style={[styles.statusText, { color: status ? status.fg : '#64748B' }]}>
-              {displayStatus}
-            </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <View style={[styles.statusBadge, { backgroundColor: status ? status.bg : '#E2E8F0' }]}>
+              <Text style={[styles.statusText, { color: status ? status.fg : '#64748B' }]}>
+                {displayStatus}
+              </Text>
+            </View>
+            {onEdit ? (
+              <Pressable style={styles.editButton} onPress={() => onEdit(product)} hitSlop={6}>
+                <Text style={styles.editButtonText}>✏️</Text>
+              </Pressable>
+            ) : null}
           </View>
         </View>
 
@@ -142,14 +150,15 @@ export default function HomeScreen() {
   const [products, setProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
 
   const [activeTab, setActiveTab] = useState<string>('home');
   const [drawerVisible, setDrawerVisible] = useState(false);
   const slideAnim = useRef(new Animated.Value(-DRAWER_WIDTH)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
-
-  useEffect(() => {
+  function loadProducts() {
+    setIsLoading(true);
     apiCall('/products')
       .then((data) => {
         const rows = Array.isArray(data) ? data : [];
@@ -174,6 +183,10 @@ export default function HomeScreen() {
         setFetchError(error?.message || 'Unable to load products from backend.');
         setIsLoading(false);
       });
+  }
+
+  useEffect(() => {
+    loadProducts();
   }, []);
 
       const lowStockCount = products.filter((p) => p.badge_status !== 'Active').length;
@@ -245,14 +258,36 @@ export default function HomeScreen() {
 
         {/* Simple tab routing using activeTab state */}
         {activeTab === 'add' ? (
-          <AddProductScreen />
+          <AddProductScreen existingCategories={Array.from(new Set(products.map((p) => p.category)))} />
+        ) : activeTab === 'edit' && editingProduct ? (
+          <EditProductScreen
+            product={editingProduct}
+            existingCategories={Array.from(new Set(products.map((p) => p.category)))}
+            onSuccess={() => {
+              setEditingProduct(null);
+              setActiveTab('products');
+              loadProducts();
+            }}
+            onCancel={() => {
+              setEditingProduct(null);
+              setActiveTab('products');
+            }}
+          />
         ) : activeTab === 'categories' ? (
           <CategoriesScreen />
         ) : activeTab === 'products' ? (
           <ProductsScreen
             products={products}
             isLoading={isLoading}
-            renderItem={({ item }: any) => <ProductCard product={item} />}
+            renderItem={({ item }: any) => (
+              <ProductCard
+                product={item}
+                onEdit={(p) => {
+                  setEditingProduct(p);
+                  setActiveTab('edit');
+                }}
+              />
+            )}
           />
         ) : isLoading ? (
           <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
@@ -267,7 +302,15 @@ export default function HomeScreen() {
           <FlatList
             data={products} 
             keyExtractor={(item) => item.id}
-            renderItem={({ item }) => <ProductCard product={item} />}
+            renderItem={({ item }) => (
+              <ProductCard
+                product={item}
+                onEdit={(p) => {
+                  setEditingProduct(p);
+                  setActiveTab('edit');
+                }}
+              />
+            )}
             contentContainerStyle={styles.listContent}
             ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
           />
@@ -522,6 +565,17 @@ const styles = StyleSheet.create({
   statusText: {
     fontSize: 10,
     fontWeight: '700',
+  },
+  editButton: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#EEF1F8',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  editButtonText: {
+    fontSize: 11,
   },
   productMeta: {
     fontSize: 11,
