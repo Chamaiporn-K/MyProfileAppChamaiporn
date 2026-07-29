@@ -18,15 +18,50 @@ function isHttpUrl(value: string) {
   return /^https?:\/\/.+/i.test(value.trim());
 }
 
-export default function AddProductScreen() {
-  const [name, setName] = useState('');
-  const [sku, setSku] = useState('');
-  const [category, setCategory] = useState('Tote');
-  const [stock, setStock] = useState('0');
-  const [location, setLocation] = useState('');
-  const [imageUrl, setImageUrl] = useState('');
-  const [status, setStatus] = useState('Available');
-  const [imageSource, setImageSource] = useState<'none' | 'url' | 'file'>('none');
+const STATUS_OPTIONS = ['Active', 'Low in stock', 'Out of Stock'] as const;
+const DEFAULT_CATEGORIES = ['Tote', 'Heritage Clutch', 'Structured Handbag', 'Patchwork Luggage'];
+
+export type EditableProduct = {
+  id: string;
+  name: string;
+  category: string;
+  stock: number;
+  location_text: string;
+  badge_status: string;
+  image_url: string;
+};
+
+type AddProductScreenProps = {
+  existingCategories?: string[];
+  product?: EditableProduct | null;
+  onSuccess?: () => void;
+  onCancel?: () => void;
+};
+
+export default function AddProductScreen({
+  existingCategories = [],
+  product = null,
+  onSuccess,
+  onCancel,
+}: AddProductScreenProps) {
+  const isEditMode = !!product;
+  const initialCategories = Array.from(
+    new Set([...DEFAULT_CATEGORIES, ...existingCategories, ...(product?.category ? [product.category] : [])])
+  );
+
+  const [name, setName] = useState(product?.name ?? '');
+  const [sku, setSku] = useState(product?.id ?? '');
+  const [categoryOptions, setCategoryOptions] = useState<string[]>(initialCategories);
+  const [category, setCategory] = useState(product?.category ?? initialCategories[0] ?? 'Tote');
+  const [isAddingCategory, setIsAddingCategory] = useState(false);
+  const [newCategoryText, setNewCategoryText] = useState('');
+  const [stock, setStock] = useState(String(product?.stock ?? 0));
+  const [location, setLocation] = useState(product?.location_text ?? '');
+  const [imageUrl, setImageUrl] = useState(product?.image_url ?? '');
+  const [status, setStatus] = useState<string>(product?.badge_status ?? STATUS_OPTIONS[0]);
+  const [imageSource, setImageSource] = useState<'none' | 'url' | 'file'>(
+    product?.image_url ? 'url' : 'none'
+  );
 
   async function pickImageFromDevice() {
     if (Platform.OS !== 'web') {
@@ -66,6 +101,26 @@ export default function AddProductScreen() {
     setImageSource('none');
   }
 
+  function confirmNewCategory() {
+    const trimmed = newCategoryText.trim();
+    if (!trimmed) {
+      setIsAddingCategory(false);
+      setNewCategoryText('');
+      return;
+    }
+    const alreadyExists = categoryOptions.some(
+      (c) => c.toLowerCase() === trimmed.toLowerCase()
+    );
+    if (alreadyExists) {
+      Alert.alert('Category exists', `"${trimmed}" is already in the list.`);
+      return;
+    }
+    setCategoryOptions((prev) => [...prev, trimmed]);
+    setCategory(trimmed);
+    setNewCategoryText('');
+    setIsAddingCategory(false);
+  }
+
   function submit() {
     if (!name || !sku) {
       Alert.alert('Validation', 'Please provide product name and SKU.');
@@ -88,27 +143,39 @@ export default function AddProductScreen() {
       image_url: trimmedImage || null,
     };
 
-    apiCall('/products', {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    })
+    const request = isEditMode
+      ? apiCall(`/products/${encodeURIComponent(product!.id)}`, {
+          method: 'PUT',
+          body: JSON.stringify(payload),
+        })
+      : apiCall('/products', {
+          method: 'POST',
+          body: JSON.stringify(payload),
+        });
+
+    request
       .then((json) => {
         if (json && json.success) {
-          Alert.alert('Product added', `${name} (${sku}) was added.`);
-          setName('');
-          setSku('');
-          setStock('0');
-          setLocation('');
-          setImageUrl('');
-          setImageSource('none');
-          setStatus('Available');
-          setCategory('Tote');
+          if (isEditMode) {
+            Alert.alert('Product updated', `${name} (${sku}) was updated.`);
+            onSuccess?.();
+          } else {
+            Alert.alert('Product added', `${name} (${sku}) was added.`);
+            setName('');
+            setSku('');
+            setStock('0');
+            setLocation('');
+            setImageUrl('');
+            setImageSource('none');
+            setStatus(STATUS_OPTIONS[0]);
+            setCategory(categoryOptions[0] ?? 'Tote');
+          }
         } else {
-          Alert.alert('Error', json?.error || 'Failed to add product.');
+          Alert.alert('Error', json?.error || `Failed to ${isEditMode ? 'update' : 'add'} product.`);
         }
       })
       .catch((err) => {
-        console.error('Add product error', err);
+        console.error(`${isEditMode ? 'Edit' : 'Add'} product error`, err);
         Alert.alert('Error', err.message || 'Failed to reach the backend.');
       });
   }
@@ -118,7 +185,7 @@ export default function AddProductScreen() {
   return (
     <SafeAreaView style={styles.root} edges={['bottom']}>
       <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
-        <Text style={styles.title}>Add Product</Text>
+        <Text style={styles.title}>{isEditMode ? 'Edit Product' : 'Add Product'}</Text>
 
         <View style={styles.field}>
           <Text style={styles.label}>Name</Text>
@@ -127,12 +194,54 @@ export default function AddProductScreen() {
 
         <View style={styles.field}>
           <Text style={styles.label}>SKU</Text>
-          <TextInput style={styles.input} value={sku} onChangeText={setSku} placeholder="TS-001" />
+          <TextInput
+            style={[styles.input, isEditMode && styles.inputDisabled]}
+            value={sku}
+            onChangeText={setSku}
+            placeholder="TS-001"
+            editable={!isEditMode}
+          />
+          {isEditMode ? <Text style={styles.hint}>SKU can't be changed after creation.</Text> : null}
         </View>
 
         <View style={styles.field}>
           <Text style={styles.label}>Category</Text>
-          <TextInput style={styles.input} value={category} onChangeText={setCategory} placeholder="Tote" />
+          <View style={styles.chipRow}>
+            {categoryOptions.map((c) => {
+              const selected = c === category;
+              return (
+                <Pressable
+                  key={c}
+                  style={[styles.chip, selected && styles.chipSelected]}
+                  onPress={() => setCategory(c)}
+                >
+                  <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{c}</Text>
+                </Pressable>
+              );
+            })}
+            <Pressable
+              style={[styles.chip, styles.chipAddNew]}
+              onPress={() => setIsAddingCategory((v) => !v)}
+            >
+              <Text style={styles.chipAddNewText}>{isAddingCategory ? '✕ Cancel' : '+ New category'}</Text>
+            </Pressable>
+          </View>
+
+          {isAddingCategory ? (
+            <View style={styles.newCategoryRow}>
+              <TextInput
+                style={[styles.input, { flex: 1 }]}
+                value={newCategoryText}
+                onChangeText={setNewCategoryText}
+                placeholder="New category name"
+                autoFocus
+                onSubmitEditing={confirmNewCategory}
+              />
+              <Pressable style={styles.addCategoryBtn} onPress={confirmNewCategory}>
+                <Text style={styles.addCategoryBtnText}>Add</Text>
+              </Pressable>
+            </View>
+          ) : null}
         </View>
 
         <View style={styles.field}>
@@ -180,12 +289,31 @@ export default function AddProductScreen() {
 
         <View style={styles.field}>
           <Text style={styles.label}>Status</Text>
-          <TextInput style={styles.input} value={status} onChangeText={setStatus} placeholder="Available / Low in stock / Out of Stock" />
+          <View style={styles.chipRow}>
+            {STATUS_OPTIONS.map((s) => {
+              const selected = s === status;
+              return (
+                <Pressable
+                  key={s}
+                  style={[styles.chip, selected && styles.chipSelected]}
+                  onPress={() => setStatus(s)}
+                >
+                  <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{s}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
         </View>
 
         <Pressable style={styles.button} onPress={submit}>
-          <Text style={styles.buttonText}>Add Product</Text>
+          <Text style={styles.buttonText}>{isEditMode ? 'Save Changes' : 'Add Product'}</Text>
         </Pressable>
+
+        {isEditMode ? (
+          <Pressable style={styles.cancelButton} onPress={onCancel}>
+            <Text style={styles.cancelButtonText}>Cancel</Text>
+          </Pressable>
+        ) : null}
       </ScrollView>
     </SafeAreaView>
   );
@@ -206,6 +334,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E6EEF6',
     color: '#0F172A',
+  },
+  inputDisabled: {
+    backgroundColor: '#F1F5F9',
+    color: '#94A3B8',
   },
   previewWrap: { marginBottom: 10, alignItems: 'flex-start' },
   previewImage: {
@@ -235,4 +367,62 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   buttonText: { color: '#FFFFFF', fontWeight: '700' },
+  cancelButton: {
+    marginTop: 10,
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  cancelButtonText: { color: '#94A3B8', fontWeight: '600', fontSize: 13 },
+  chipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  chip: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#E6EEF6',
+    backgroundColor: '#FFFFFF',
+  },
+  chipSelected: {
+    backgroundColor: '#1B2A4A',
+    borderColor: '#1B2A4A',
+  },
+  chipText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  chipTextSelected: {
+    color: '#FFFFFF',
+  },
+  chipAddNew: {
+    borderStyle: 'dashed',
+    borderColor: '#1B2A4A',
+  },
+  chipAddNewText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#1B2A4A',
+  },
+  newCategoryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 10,
+  },
+  addCategoryBtn: {
+    backgroundColor: '#1B2A4A',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 10,
+  },
+  addCategoryBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 12,
+  },
 });

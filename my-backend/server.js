@@ -135,6 +135,47 @@ app.post('/api/products', async (req, res) => {
   }
 });
 
+// Update product
+app.put('/api/products/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const body = req.body || {};
+    const {
+      name,
+      stock = 0,
+      category = null,
+      location_text = null,
+      badge_status = null,
+      image_url = null,
+      product_link = null,
+    } = body;
+
+    if (!name) return res.status(400).json({ error: 'Missing name' });
+
+    const sqlWithLink = `UPDATE \`${PRODUCTS_TABLE}\` SET Name = ?, Stock = ?, Category = ?, Location = ?, Status = ?, image = ?, ProductLink = ?, LastUpdate = NOW() WHERE Productcode = ?`;
+    const sqlLegacy = `UPDATE \`${PRODUCTS_TABLE}\` SET Name = ?, Stock = ?, Category = ?, Location = ?, Status = ?, image = ?, LastUpdate = NOW() WHERE Productcode = ?`;
+    const paramsWithLink = [name, Number(stock) || 0, category, location_text, badge_status, image_url, product_link, id];
+    const paramsLegacy = [name, Number(stock) || 0, category, location_text, badge_status, image_url, id];
+
+    let result;
+    try {
+      [result] = await pool.query(sqlWithLink, paramsWithLink);
+    } catch (updateErr) {
+      if (!isUnknownColumn(updateErr)) throw updateErr;
+      [result] = await pool.query(sqlLegacy, paramsLegacy);
+    }
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: 'Product not found' });
+    }
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Update Product Error:', err.message || err);
+    res.status(500).json({ error: 'Failed to update product: ' + (err.message || 'Unknown error') });
+  }
+});
+
 app.listen(port,'0.0.0.0',()=>{
   console.log(`🚀 API running on port ${port}`);
 });
