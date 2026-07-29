@@ -135,7 +135,7 @@ app.post('/api/products', async (req, res) => {
   }
 });
 
-// Update product
+// Edit product
 app.put('/api/products/:id', async (req, res) => {
   try {
     const { id } = req.params;
