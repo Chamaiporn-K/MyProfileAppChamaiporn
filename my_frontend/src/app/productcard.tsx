@@ -1,5 +1,5 @@
 import React from 'react';
-import { Alert, Image, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Image, Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { getProductStatus } from '../lib/product-status';
 
 export type Product = {
@@ -46,9 +46,21 @@ export default function ProductCard({
 
   const handleDeletePress = () => {
     if (!onDelete) return;
+
+    const message = `Are you sure you want to delete "${product.name}"? This cannot be undone.`;
+
+    if (Platform.OS === 'web') {
+      // Alert.alert's multi-button dialog doesn't render on react-native-web,
+      // so on web we fall back to the browser's native confirm dialog.
+      if (typeof window !== 'undefined' && window.confirm(message)) {
+        onDelete(product);
+      }
+      return;
+    }
+
     Alert.alert(
       'Delete product',
-      `Are you sure you want to delete "${product.name}"? This cannot be undone.`,
+      message,
       [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Delete', style: 'destructive', onPress: () => onDelete(product) },
