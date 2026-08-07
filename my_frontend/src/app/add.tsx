@@ -24,6 +24,9 @@ const DEFAULT_CATEGORIES = ['Tote', 'Heritage Clutch', 'Structured Handbag', 'Pa
 export type EditableProduct = {
   id: string;
   name: string;
+  details?: string;
+  color?: string;
+  size?: string;
   category: string;
   stock: number;
   location_text: string;
@@ -51,6 +54,9 @@ export default function AddProductScreen({
 
   const [name, setName] = useState(product?.name ?? '');
   const [sku, setSku] = useState(product?.id ?? '');
+  const [details, setDetails] = useState(product?.details ?? '');
+  const [color, setColor] = useState(product?.color ?? '');
+  const [size, setSize] = useState(product?.size ?? '');
   const [categoryOptions, setCategoryOptions] = useState<string[]>(initialCategories);
   const [category, setCategory] = useState(product?.category ?? initialCategories[0] ?? 'Tote');
   const [isAddingCategory, setIsAddingCategory] = useState(false);
@@ -136,6 +142,9 @@ export default function AddProductScreen({
     const payload = {
       id: sku,
       name,
+      details,
+      color: color.trim() || null,
+      size,
       category,
       stock: Number(stock),
       location_text: location,
@@ -163,6 +172,9 @@ export default function AddProductScreen({
             Alert.alert('Product added', `${name} (${sku}) was added.`);
             setName('');
             setSku('');
+            setDetails('');
+            setColor('');
+            setSize('');
             setStock('0');
             setLocation('');
             setImageUrl('');
@@ -202,6 +214,36 @@ export default function AddProductScreen({
             editable={!isEditMode}
           />
           {isEditMode ? <Text style={styles.hint}>SKU can't be changed after creation.</Text> : null}
+        </View>
+
+        <View style={styles.field}>
+          <Text style={styles.label}>Details</Text>
+          <TextInput
+            style={styles.input}
+            value={details}
+            onChangeText={setDetails}
+            placeholder="Short product details"
+          />
+        </View>
+
+        <View style={styles.field}>
+          <Text style={styles.label}>Color</Text>
+          <TextInput
+            style={styles.input}
+            value={color}
+            onChangeText={setColor}
+            placeholder="e.g. Black, Tan"
+          />
+        </View>
+
+        <View style={styles.field}>
+          <Text style={styles.label}>Size</Text>
+          <TextInput
+            style={styles.input}
+            value={size}
+            onChangeText={setSize}
+            placeholder="e.g. S, M, L / 30x20cm"
+          />
         </View>
 
         <View style={styles.field}>
