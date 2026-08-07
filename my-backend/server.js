@@ -25,6 +25,13 @@ const pool = mysql.createPool({
 // Linux MySQL is case-sensitive — actual table name is `Products`
 const PRODUCTS_TABLE = 'Products';
 
+function getComputedStatus(stock) {
+  const numericStock = Number(stock ?? 0);
+  if (numericStock <= 0) return 'Out of Stock';
+  if (numericStock < 20) return 'Low Stock';
+  return 'In Stock';
+}
+
 function isUnknownColumn(err) {
   return err && (err.code === 'ER_BAD_FIELD_ERROR' || err.errno === 1054);
 }
@@ -55,7 +62,6 @@ app.get('/api/products', async(req,res)=>{
         CONCAT(Stock, ' in stock') AS stock_text,
         1 AS location_count,
         IFNULL(Location, '') AS location_text,
-        IFNULL(Status, 'Active') AS badge_status,
         IFNULL(image, '') AS image_url,
         IFNULL(ProductLink, '') AS product_link
       FROM \`${PRODUCTS_TABLE}\`
@@ -72,7 +78,6 @@ app.get('/api/products', async(req,res)=>{
         CONCAT(Stock, ' in stock') AS stock_text,
         1 AS location_count,
         IFNULL(Location, '') AS location_text,
-        IFNULL(Status, 'Active') AS badge_status,
         IFNULL(image, '') AS image_url
       FROM \`${PRODUCTS_TABLE}\`
       ORDER BY LastUpdate DESC`;
@@ -85,7 +90,15 @@ app.get('/api/products', async(req,res)=>{
       [rows] = await pool.query(selectLegacy);
       rows = rows.map((row) => ({ ...row, product_link: '' }));
     }
-    res.json(rows);
+
+    const mappedRows = (rows || []).map((row) => ({
+      ...row,
+      badge_status: getComputedStatus(row.stock ?? row.Stock ?? 0),
+      stock_text: row.stock_text ?? `${Number(row.stock ?? row.Stock ?? 0)} in stock`,
+      product_link: row.product_link ?? '',
+    }));
+
+    res.json(mappedRows);
   }catch(e){
     console.error('Products Error:', e.message || e);
     res.status(500).json({ error:'Failed to fetch products: ' + (e.message || 'Unknown error') });
@@ -118,17 +131,16 @@ app.post('/api/products', async (req, res) => {
       stock = 0,
       category = null,
       location_text = null,
-      badge_status = null,
       image_url = null,
       product_link = null,
     } = body;
 
     if (!id || !name) return res.status(400).json({ error: 'Missing id or name' });
 
-    const sqlWithLink = `INSERT INTO \`${PRODUCTS_TABLE}\` (Productcode, Name, details, color, size, Stock, Category, Location, Status, image, ProductLink, LastUpdate) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`;
-    const sqlLegacy = `INSERT INTO \`${PRODUCTS_TABLE}\` (Productcode, Name, details, color, size, Stock, Category, Location, Status, image, LastUpdate) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`;
-    const paramsWithLink = [id, name, details || '', color, size || '', Number(stock) || 0, category, location_text, badge_status, image_url, product_link];
-    const paramsLegacy = [id, name, details || '', color, size || '', Number(stock) || 0, category, location_text, badge_status, image_url];
+    const sqlWithLink = `INSERT INTO \`${PRODUCTS_TABLE}\` (Productcode, Name, details, color, size, Stock, Category, Location, image, ProductLink, LastUpdate) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`;
+    const sqlLegacy = `INSERT INTO \`${PRODUCTS_TABLE}\` (Productcode, Name, details, color, size, Stock, Category, Location, image, LastUpdate) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`;
+    const paramsWithLink = [id, name, details || '', color, size || '', Number(stock) || 0, category, location_text, image_url, product_link];
+    const paramsLegacy = [id, name, details || '', color, size || '', Number(stock) || 0, category, location_text, image_url];
 
     try {
       await pool.query(sqlWithLink, paramsWithLink);
@@ -157,17 +169,16 @@ app.put('/api/products/:id', async (req, res) => {
       stock = 0,
       category = null,
       location_text = null,
-      badge_status = null,
       image_url = null,
       product_link = null,
     } = body;
 
     if (!name) return res.status(400).json({ error: 'Missing name' });
 
-    const sqlWithLink = `UPDATE \`${PRODUCTS_TABLE}\` SET Name = ?, details = ?, color = ?, size = ?, Stock = ?, Category = ?, Location = ?, Status = ?, image = ?, ProductLink = ?, LastUpdate = NOW() WHERE Productcode = ?`;
-    const sqlLegacy = `UPDATE \`${PRODUCTS_TABLE}\` SET Name = ?, details = ?, color = ?, size = ?, Stock = ?, Category = ?, Location = ?, Status = ?, image = ?, LastUpdate = NOW() WHERE Productcode = ?`;
-    const paramsWithLink = [name, details || '', color, size || '', Number(stock) || 0, category, location_text, badge_status, image_url, product_link, id];
-    const paramsLegacy = [name, details || '', color, size || '', Number(stock) || 0, category, location_text, badge_status, image_url, id];
+    const sqlWithLink = `UPDATE \`${PRODUCTS_TABLE}\` SET Name = ?, details = ?, color = ?, size = ?, Stock = ?, Category = ?, Location = ?, image = ?, ProductLink = ?, LastUpdate = NOW() WHERE Productcode = ?`;
+    const sqlLegacy = `UPDATE \`${PRODUCTS_TABLE}\` SET Name = ?, details = ?, color = ?, size = ?, Stock = ?, Category = ?, Location = ?, image = ?, LastUpdate = NOW() WHERE Productcode = ?`;
+    const paramsWithLink = [name, details || '', color, size || '', Number(stock) || 0, category, location_text, image_url, product_link, id];
+    const paramsLegacy = [name, details || '', color, size || '', Number(stock) || 0, category, location_text, image_url, id];
 
     let result;
     try {

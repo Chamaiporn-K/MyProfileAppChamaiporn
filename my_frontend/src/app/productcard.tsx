@@ -1,5 +1,6 @@
 import React from 'react';
 import { Image, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { getProductStatus } from '../lib/product-status';
 
 export type Product = {
   id: string;
@@ -12,7 +13,6 @@ export type Product = {
   stock_text: string;
   location_count: number;
   location_text: string;
-  badge_status: string;
   image_url: string;
   product_link?: string;
 };
@@ -25,8 +25,8 @@ export const CATEGORY_STYLE: Record<string, { bg: string; fg: string }> = {
 };
 
 export const STATUS_STYLE: Record<string, { bg: string; fg: string }> = {
-  'Active': { bg: '#E4F5E8', fg: '#2F8F4E' },
-  'Low in stock': { bg: '#FDF1DA', fg: '#B4791E' },
+  'In Stock': { bg: '#E4F5E8', fg: '#2F8F4E' },
+  'Low Stock': { bg: '#FDF1DA', fg: '#B4791E' },
   'Out of Stock': { bg: '#FDECEC', fg: '#C53030' },
 };
 
@@ -38,12 +38,9 @@ export default function ProductCard({
   onEdit?: (product: Product) => void;
 }) {
   const cat = CATEGORY_STYLE[product.category];
-  const status = STATUS_STYLE[product.badge_status];
-  const displayStatus = product.badge_status === 'Active'
-    ? 'In Stock'
-    : product.badge_status === 'Low in stock'
-    ? 'Low Stock'
-    : product.badge_status;
+  const derivedStatus = getProductStatus(product.stock);
+  const status = STATUS_STYLE[derivedStatus];
+  const displayStatus = derivedStatus;
 
   return (
     <View style={styles.productCard}>
