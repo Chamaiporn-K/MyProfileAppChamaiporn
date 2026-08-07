@@ -18,6 +18,7 @@ import CategoriesScreen from './categories';
 import ProductsScreen from './products';
 import ProductCard, { Product } from './productcard';
 import { apiCall } from '../lib/api';
+import { getProductStatus } from '../lib/product-status';
 
 const RECENT_PRODUCTS_LIMIT = 4;
 
@@ -83,7 +84,6 @@ export default function HomeScreen() {
           stock_text: row.stock_text ?? `${row.Stock ?? row.stock ?? 0} in stock`,
           location_count: Number(row.location_count ?? 1),
           location_text: row.location_text ?? row.Location ?? '',
-          badge_status: row.badge_status ?? row.Status ?? 'Active',
           image_url: row.image_url ?? row.image ?? '',
           product_link: row.product_link ?? '',
         }));
@@ -101,7 +101,7 @@ export default function HomeScreen() {
     loadProducts();
   }, []);
 
-      const lowStockCount = products.filter((p) => p.badge_status !== 'Active').length;
+      const lowStockCount = products.filter((p) => getProductStatus(p.stock) !== 'In Stock').length;
 
   function openDrawer() {
     setDrawerVisible(true);

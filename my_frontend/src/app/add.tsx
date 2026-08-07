@@ -13,12 +13,12 @@ import {
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { apiCall } from '../lib/api';
+import { getProductStatus } from '../lib/product-status';
 
 function isHttpUrl(value: string) {
   return /^https?:\/\/.+/i.test(value.trim());
 }
 
-const STATUS_OPTIONS = ['Active', 'Low in stock', 'Out of Stock'] as const;
 const DEFAULT_CATEGORIES = ['Tote', 'Heritage Clutch', 'Structured Handbag', 'Patchwork Luggage'];
 
 export type EditableProduct = {
@@ -30,7 +30,6 @@ export type EditableProduct = {
   category: string;
   stock: number;
   location_text: string;
-  badge_status: string;
   image_url: string;
 };
 
@@ -64,7 +63,6 @@ export default function AddProductScreen({
   const [stock, setStock] = useState(String(product?.stock ?? 0));
   const [location, setLocation] = useState(product?.location_text ?? '');
   const [imageUrl, setImageUrl] = useState(product?.image_url ?? '');
-  const [status, setStatus] = useState<string>(product?.badge_status ?? STATUS_OPTIONS[0]);
   const [imageSource, setImageSource] = useState<'none' | 'url' | 'file'>(
     product?.image_url ? 'url' : 'none'
   );
@@ -139,6 +137,8 @@ export default function AddProductScreen({
       return;
     }
 
+    const parsedStock = Number(stock);
+    const derivedStatus = getProductStatus(parsedStock);
     const payload = {
       id: sku,
       name,
@@ -146,9 +146,8 @@ export default function AddProductScreen({
       color: color.trim() || null,
       size,
       category,
-      stock: Number(stock),
+      stock: parsedStock,
       location_text: location,
-      badge_status: status,
       image_url: trimmedImage || null,
     };
 
@@ -179,7 +178,6 @@ export default function AddProductScreen({
             setLocation('');
             setImageUrl('');
             setImageSource('none');
-            setStatus(STATUS_OPTIONS[0]);
             setCategory(categoryOptions[0] ?? 'Tote');
           }
         } else {
@@ -193,6 +191,7 @@ export default function AddProductScreen({
   }
 
   const previewUri = imageUrl.trim() || null;
+  const derivedStatus = getProductStatus(Number(stock));
 
   return (
     <SafeAreaView style={styles.root} edges={['bottom']}>
@@ -331,20 +330,10 @@ export default function AddProductScreen({
 
         <View style={styles.field}>
           <Text style={styles.label}>Status</Text>
-          <View style={styles.chipRow}>
-            {STATUS_OPTIONS.map((s) => {
-              const selected = s === status;
-              return (
-                <Pressable
-                  key={s}
-                  style={[styles.chip, selected && styles.chipSelected]}
-                  onPress={() => setStatus(s)}
-                >
-                  <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{s}</Text>
-                </Pressable>
-              );
-            })}
+          <View style={[styles.chip, styles.chipSelected]}>
+            <Text style={[styles.chipText, styles.chipTextSelected]}>{derivedStatus}</Text>
           </View>
+          <Text style={styles.hint}>Status is calculated from stock automatically: 0 = Out of Stock, below 20 = Low Stock.</Text>
         </View>
 
         <Pressable style={styles.button} onPress={submit}>
