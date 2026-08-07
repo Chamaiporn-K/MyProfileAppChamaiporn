@@ -29,7 +29,7 @@ export default function ProductsScreen({ products, isLoading, renderItem }: { pr
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#FAFAFB' },
-  container: { paddingHorizontal: 20, paddingTop: 10, paddingBottom: 16 },
+  container: { flex: 1, paddingHorizontal: 20, paddingTop: 10, paddingBottom: 16 },
   title: { fontSize: 20, fontWeight: '700', marginBottom: 12, color: '#1B2A4A' },
-  listContent: { paddingBottom: 16 },
+  listContent: { paddingBottom: 16, flexGrow: 1 },
 });

@@ -47,6 +47,9 @@ app.get('/api/products', async(req,res)=>{
     const selectWithLink = `SELECT
         Productcode AS id,
         Name AS name,
+        IFNULL(details, '') AS details,
+        IFNULL(color, '') AS color,
+        IFNULL(size, '') AS size,
         Category AS category,
         Stock AS stock,
         CONCAT(Stock, ' in stock') AS stock_text,
@@ -61,6 +64,9 @@ app.get('/api/products', async(req,res)=>{
     const selectLegacy = `SELECT
         Productcode AS id,
         Name AS name,
+        IFNULL(details, '') AS details,
+        IFNULL(color, '') AS color,
+        IFNULL(size, '') AS size,
         Category AS category,
         Stock AS stock,
         CONCAT(Stock, ' in stock') AS stock_text,
@@ -106,6 +112,9 @@ app.post('/api/products', async (req, res) => {
     const {
       id,
       name,
+      details = '',
+      color = null,
+      size = '',
       stock = 0,
       category = null,
       location_text = null,
@@ -116,10 +125,10 @@ app.post('/api/products', async (req, res) => {
 
     if (!id || !name) return res.status(400).json({ error: 'Missing id or name' });
 
-    const sqlWithLink = `INSERT INTO \`${PRODUCTS_TABLE}\` (Productcode, Name, Stock, Category, Location, Status, image, ProductLink, LastUpdate) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())`;
-    const sqlLegacy = `INSERT INTO \`${PRODUCTS_TABLE}\` (Productcode, Name, Stock, Category, Location, Status, image, LastUpdate) VALUES (?, ?, ?, ?, ?, ?, ?, NOW())`;
-    const paramsWithLink = [id, name, Number(stock) || 0, category, location_text, badge_status, image_url, product_link];
-    const paramsLegacy = [id, name, Number(stock) || 0, category, location_text, badge_status, image_url];
+    const sqlWithLink = `INSERT INTO \`${PRODUCTS_TABLE}\` (Productcode, Name, details, color, size, Stock, Category, Location, Status, image, ProductLink, LastUpdate) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`;
+    const sqlLegacy = `INSERT INTO \`${PRODUCTS_TABLE}\` (Productcode, Name, details, color, size, Stock, Category, Location, Status, image, LastUpdate) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`;
+    const paramsWithLink = [id, name, details || '', color, size || '', Number(stock) || 0, category, location_text, badge_status, image_url, product_link];
+    const paramsLegacy = [id, name, details || '', color, size || '', Number(stock) || 0, category, location_text, badge_status, image_url];
 
     try {
       await pool.query(sqlWithLink, paramsWithLink);
@@ -142,6 +151,9 @@ app.put('/api/products/:id', async (req, res) => {
     const body = req.body || {};
     const {
       name,
+      details = '',
+      color = null,
+      size = '',
       stock = 0,
       category = null,
       location_text = null,
@@ -152,10 +164,10 @@ app.put('/api/products/:id', async (req, res) => {
 
     if (!name) return res.status(400).json({ error: 'Missing name' });
 
-    const sqlWithLink = `UPDATE \`${PRODUCTS_TABLE}\` SET Name = ?, Stock = ?, Category = ?, Location = ?, Status = ?, image = ?, ProductLink = ?, LastUpdate = NOW() WHERE Productcode = ?`;
-    const sqlLegacy = `UPDATE \`${PRODUCTS_TABLE}\` SET Name = ?, Stock = ?, Category = ?, Location = ?, Status = ?, image = ?, LastUpdate = NOW() WHERE Productcode = ?`;
-    const paramsWithLink = [name, Number(stock) || 0, category, location_text, badge_status, image_url, product_link, id];
-    const paramsLegacy = [name, Number(stock) || 0, category, location_text, badge_status, image_url, id];
+    const sqlWithLink = `UPDATE \`${PRODUCTS_TABLE}\` SET Name = ?, details = ?, color = ?, size = ?, Stock = ?, Category = ?, Location = ?, Status = ?, image = ?, ProductLink = ?, LastUpdate = NOW() WHERE Productcode = ?`;
+    const sqlLegacy = `UPDATE \`${PRODUCTS_TABLE}\` SET Name = ?, details = ?, color = ?, size = ?, Stock = ?, Category = ?, Location = ?, Status = ?, image = ?, LastUpdate = NOW() WHERE Productcode = ?`;
+    const paramsWithLink = [name, details || '', color, size || '', Number(stock) || 0, category, location_text, badge_status, image_url, product_link, id];
+    const paramsLegacy = [name, details || '', color, size || '', Number(stock) || 0, category, location_text, badge_status, image_url, id];
 
     let result;
     try {
