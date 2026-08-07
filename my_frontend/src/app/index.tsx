@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Animated,
   Dimensions,
   Modal,
@@ -101,6 +102,20 @@ export default function HomeScreen() {
     loadProducts();
   }, []);
 
+  function handleDeleteProduct(product: Product) {
+    // Optimistically remove from the list so the UI feels instant
+    const previousProducts = products;
+    setProducts((prev) => prev.filter((p) => p.id !== product.id));
+
+    apiCall(`/products/${product.id}`, { method: 'DELETE' })
+      .catch((error) => {
+        console.error('Error deleting product:', error);
+        // Roll back if the delete failed on the server
+        setProducts(previousProducts);
+        Alert.alert('Delete failed', error?.message || 'Unable to delete product.');
+      });
+  }
+
       const lowStockCount = products.filter((p) => getProductStatus(p.stock) !== 'In Stock').length;
 
   function openDrawer() {
@@ -200,6 +215,7 @@ export default function HomeScreen() {
                   setEditingProduct(p);
                   setActiveTab('edit');
                 }}
+                onDelete={handleDeleteProduct}
               />
             )}
           />
@@ -215,7 +231,15 @@ export default function HomeScreen() {
         ) : (
           <View style={styles.recentList}>
             {products.slice(0, RECENT_PRODUCTS_LIMIT).map((item) => (
-              <ProductCard key={item.id} product={item} />
+              <ProductCard
+                key={item.id}
+                product={item}
+                onEdit={(p) => {
+                  setEditingProduct(p);
+                  setActiveTab('edit');
+                }}
+                onDelete={handleDeleteProduct}
+              />
             ))}
           </View>
         )}
