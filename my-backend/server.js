@@ -199,6 +199,27 @@ app.put('/api/products/:id', async (req, res) => {
   }
 });
 
+// Delete product
+app.delete('/api/products/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const [result] = await pool.query(
+      `DELETE FROM \`${PRODUCTS_TABLE}\` WHERE Productcode = ?`,
+      [id]
+    );
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: 'Product not found' });
+    }
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Delete Product Error:', err.message || err);
+    res.status(500).json({ error: 'Failed to delete product: ' + (err.message || 'Unknown error') });
+  }
+});
+
 app.listen(port,'0.0.0.0',()=>{
   console.log(`🚀 API running on port ${port}`);
 });

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Image, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Image, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import { getProductStatus } from '../lib/product-status';
 
 export type Product = {
@@ -33,14 +33,28 @@ export const STATUS_STYLE: Record<string, { bg: string; fg: string }> = {
 export default function ProductCard({
   product,
   onEdit,
+  onDelete,
 }: {
   product: Product;
   onEdit?: (product: Product) => void;
+  onDelete?: (product: Product) => void;
 }) {
   const cat = CATEGORY_STYLE[product.category];
   const derivedStatus = getProductStatus(product.stock);
   const status = STATUS_STYLE[derivedStatus];
   const displayStatus = derivedStatus;
+
+  const handleDeletePress = () => {
+    if (!onDelete) return;
+    Alert.alert(
+      'Delete product',
+      `Are you sure you want to delete "${product.name}"? This cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete', style: 'destructive', onPress: () => onDelete(product) },
+      ]
+    );
+  };
 
   return (
     <View style={styles.productCard}>
@@ -66,6 +80,11 @@ export default function ProductCard({
             {onEdit ? (
               <Pressable style={styles.editButton} onPress={() => onEdit(product)} hitSlop={6}>
                 <Text style={styles.editButtonText}>✏️</Text>
+              </Pressable>
+            ) : null}
+            {onDelete ? (
+              <Pressable style={styles.deleteButton} onPress={handleDeletePress} hitSlop={6}>
+                <Text style={styles.deleteButtonText}>🗑️</Text>
               </Pressable>
             ) : null}
           </View>
@@ -155,6 +174,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   editButtonText: {
+    fontSize: 11,
+  },
+  deleteButton: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#FDECEC',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  deleteButtonText: {
     fontSize: 11,
   },
   productMeta: {
