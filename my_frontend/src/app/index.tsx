@@ -6,6 +6,7 @@ import {
   Dimensions,
   Modal,
   Pressable,
+  ScrollView,
   StatusBar,
   StyleSheet,
   Text,
@@ -229,19 +230,18 @@ export default function HomeScreen() {
             <Text style={{ marginTop: 8, color: '#C53030' }}>{fetchError}</Text>
           </View>
         ) : (
-          <View style={styles.recentList}>
+          <ScrollView
+            style={styles.homeContent}
+            contentContainerStyle={styles.recentList}
+            showsVerticalScrollIndicator={false}
+          >
             {products.slice(0, RECENT_PRODUCTS_LIMIT).map((item) => (
               <ProductCard
                 key={item.id}
                 product={item}
-                onEdit={(p) => {
-                  setEditingProduct(p);
-                  setActiveTab('edit');
-                }}
-                onDelete={handleDeleteProduct}
               />
             ))}
-          </View>
+          </ScrollView>
         )}
 
         <View style={styles.bottomNav}>
@@ -440,6 +440,9 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     color: '#1B2A4A',
+  },
+  homeContent: {
+    flex: 1,
   },
   recentList: {
     paddingHorizontal: 20,
