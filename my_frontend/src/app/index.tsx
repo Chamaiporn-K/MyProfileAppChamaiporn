@@ -17,6 +17,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import AddProductScreen from './add';
 import EditProductScreen from './edit';
 import CategoriesScreen from './categories';
+import LocationsScreen from './locations';
 import ProductsScreen from './products';
 import ProductCard, { Product } from './productcard';
 import { apiCall } from '../lib/api';
@@ -31,7 +32,12 @@ const NAV_ITEMS = [
   { key: 'categories', label: 'Categories', emoji: '🗂️' },
 ] as const;
 
-const DRAWER_ITEMS = ['Home', 'Products', 'Categories', 'Stores', 'Finances', 'Settings'];
+const DRAWER_ITEMS = [
+  { key: 'home', label: 'Home' },
+  { key: 'products', label: 'Products' },
+  { key: 'categories', label: 'Categories' },
+  { key: 'locations', label: 'Location (Warehouse)' },
+] as const;
 const DRAWER_WIDTH = Math.min(280, Dimensions.get('window').width * 0.78);
 
 function ThaiPatternOverlay() {
@@ -64,17 +70,22 @@ export default function HomeScreen() {
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [deletingProductId, setDeletingProductId] = useState<string | null>(null);
 
   const [activeTab, setActiveTab] = useState<string>('home');
   const [drawerVisible, setDrawerVisible] = useState(false);
   const slideAnim = useRef(new Animated.Value(-DRAWER_WIDTH)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
-  function loadProducts() {
+  function loadProducts(query = searchQuery) {
     setIsLoading(true);
-    apiCall('/products')
+    setFetchError(null);
+    const params = new URLSearchParams({ page: '1', limit: '50' });
+    if (query.trim()) params.set('q', query.trim());
+
+    apiCall(`/products?${params.toString()}`)
       .then((data) => {
-        const rows = Array.isArray(data) ? data : [];
+        const rows = Array.isArray(data) ? data : Array.isArray(data?.items) ? data.items : [];
         // Map DB columns (Productcode, Name, ...) to frontend Product shape
         const mapped: Product[] = rows.map((row: any) => ({
           id: String(row.id ?? row.Productcode ?? ''),
@@ -101,37 +112,22 @@ export default function HomeScreen() {
   }
 
   useEffect(() => {
-    loadProducts();
-  }, []);
+    const timer = setTimeout(() => loadProducts(searchQuery), 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   function handleDeleteProduct(product: Product) {
-    // Optimistically remove from the list so the UI feels instant
-    const previousProducts = products;
-    setProducts((prev) => prev.filter((p) => p.id !== product.id));
-
-    apiCall(`/products/${product.id}`, { method: 'DELETE' })
+    setDeletingProductId(product.id);
+    apiCall(`/products/${encodeURIComponent(product.id)}`, { method: 'DELETE' })
+      .then(() => {
+        setProducts((prev) => prev.filter((p) => p.id !== product.id));
+      })
       .catch((error) => {
         console.error('Error deleting product:', error);
-        // Roll back if the delete failed on the server
-        setProducts(previousProducts);
         Alert.alert('Delete failed', error?.message || 'Unable to delete product.');
-      });
+      })
+      .finally(() => setDeletingProductId(null));
   }
-
-  const normalizedSearchQuery = searchQuery.trim().toLocaleLowerCase();
-  const filteredProducts = products.filter((product) => {
-    if (!normalizedSearchQuery) return true;
-
-    return [
-      product.id,
-      product.name,
-      product.category,
-      product.details,
-      product.color,
-      product.size,
-      product.location_text,
-    ].some((value) => String(value ?? '').toLocaleLowerCase().includes(normalizedSearchQuery));
-  });
 
   const lowStockCount = products.filter((p) => getProductStatus(p.stock) !== 'In Stock').length;
 
@@ -148,6 +144,11 @@ export default function HomeScreen() {
       Animated.timing(slideAnim, { toValue: -DRAWER_WIDTH, duration: 200, useNativeDriver: true }),
       Animated.timing(fadeAnim, { toValue: 0, duration: 200, useNativeDriver: true }),
     ]).start(() => setDrawerVisible(false));
+  }
+
+  function navigateFromDrawer(tab: 'home' | 'products' | 'categories' | 'locations') {
+    setActiveTab(tab);
+    closeDrawer();
   }
 
   return (
@@ -230,10 +231,12 @@ export default function HomeScreen() {
             }}
           />
         ) : activeTab === 'categories' ? (
-          <CategoriesScreen />
+          <CategoriesScreen products={products} />
+        ) : activeTab === 'locations' ? (
+          <LocationsScreen products={products} />
         ) : activeTab === 'products' ? (
           <ProductsScreen
-            products={filteredProducts}
+            products={products}
             isLoading={isLoading}
             searchQuery={searchQuery}
             renderItem={({ item }: any) => (
@@ -244,6 +247,7 @@ export default function HomeScreen() {
                   setActiveTab('edit');
                 }}
                 onDelete={handleDeleteProduct}
+                isDeleting={deletingProductId === item.id}
               />
             )}
           />
@@ -262,13 +266,13 @@ export default function HomeScreen() {
             contentContainerStyle={styles.recentList}
             showsVerticalScrollIndicator={false}
           >
-            {filteredProducts.slice(0, RECENT_PRODUCTS_LIMIT).map((item) => (
+            {products.slice(0, RECENT_PRODUCTS_LIMIT).map((item) => (
               <ProductCard
                 key={item.id}
                 product={item}
               />
             ))}
-            {filteredProducts.length === 0 ? (
+            {products.length === 0 ? (
               <View style={styles.homeEmptyState}>
                 <Text style={styles.homeEmptyTitle}>No products found</Text>
                 <Text style={styles.homeEmptyText}>Try a different product name or SKU.</Text>
@@ -317,8 +321,14 @@ export default function HomeScreen() {
 
               <View style={styles.drawerMenu}>
                 {DRAWER_ITEMS.map((item) => (
-                  <Pressable key={item} onPress={closeDrawer} style={styles.drawerItem}>
-                    <Text style={styles.drawerItemText}>{item}</Text>
+                  <Pressable
+                    key={item.key}
+                    onPress={() => navigateFromDrawer(item.key)}
+                    style={[styles.drawerItem, activeTab === item.key && styles.drawerItemActive]}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: activeTab === item.key }}
+                  >
+                    <Text style={[styles.drawerItemText, activeTab === item.key && styles.drawerItemTextActive]}>{item.label}</Text>
                   </Pressable>
                 ))}
               </View>
@@ -567,13 +577,19 @@ const styles = StyleSheet.create({
     gap: 22,
   },
   drawerItem: {
-    paddingVertical: 4,
+    borderRadius: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    minWidth: 210,
   },
+  drawerItemActive: { backgroundColor: 'rgba(255,255,255,0.14)' },
   drawerItemText: {
     color: '#FFFFFF',
     fontSize: 17,
     fontWeight: '700',
+    textAlign: 'center',
   },
+  drawerItemTextActive: { color: '#F2A93B' },
   drawerLogout: {
     alignItems: 'center',
     paddingVertical: 22,

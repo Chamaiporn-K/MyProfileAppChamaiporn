@@ -1,6 +1,6 @@
 import { API_BASE_URL } from './constants';
 
-type ApiOptions = RequestInit & {
+type ApiOptions = Omit<RequestInit, 'headers'> & {
   headers?: Record<string, string>;
 };
 

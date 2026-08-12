@@ -48,9 +48,21 @@ function isUnknownColumn(err) {
   }
 })();
 
-// Get products
+// Get products (optionally searched and paginated).
 app.get('/api/products', async(req,res)=>{
   try{
+    const query = String(req.query.q ?? '').trim();
+    const parsedPage = Number.parseInt(String(req.query.page ?? '1'), 10);
+    const parsedLimit = Number.parseInt(String(req.query.limit ?? '50'), 10);
+    const page = Number.isFinite(parsedPage) ? Math.max(1, parsedPage) : 1;
+    const limit = Number.isFinite(parsedLimit) ? Math.min(100, Math.max(1, parsedLimit)) : 50;
+    const offset = (page - 1) * limit;
+    const searchableColumns = ['Productcode', 'Name', 'Category', 'details', 'color', 'size', 'Location'];
+    const whereClause = query
+      ? `WHERE ${searchableColumns.map((column) => `COALESCE(\`${column}\`, '') LIKE ?`).join(' OR ')}`
+      : '';
+    const searchParams = query ? searchableColumns.map(() => `%${query}%`) : [];
+
     const selectWithLink = `SELECT
         Productcode AS id,
         Name AS name,
@@ -65,7 +77,9 @@ app.get('/api/products', async(req,res)=>{
         IFNULL(image, '') AS image_url,
         IFNULL(ProductLink, '') AS product_link
       FROM \`${PRODUCTS_TABLE}\`
-      ORDER BY LastUpdate DESC`;
+      ${whereClause}
+      ORDER BY LastUpdate DESC
+      LIMIT ? OFFSET ?`;
 
     const selectLegacy = `SELECT
         Productcode AS id,
@@ -80,16 +94,23 @@ app.get('/api/products', async(req,res)=>{
         IFNULL(Location, '') AS location_text,
         IFNULL(image, '') AS image_url
       FROM \`${PRODUCTS_TABLE}\`
-      ORDER BY LastUpdate DESC`;
+      ${whereClause}
+      ORDER BY LastUpdate DESC
+      LIMIT ? OFFSET ?`;
 
     let rows;
     try {
-      [rows] = await pool.query(selectWithLink);
+      [rows] = await pool.query(selectWithLink, [...searchParams, limit, offset]);
     } catch (e) {
       if (!isUnknownColumn(e)) throw e;
-      [rows] = await pool.query(selectLegacy);
+      [rows] = await pool.query(selectLegacy, [...searchParams, limit, offset]);
       rows = rows.map((row) => ({ ...row, product_link: '' }));
     }
+
+    const [totalRows] = await pool.query(
+      `SELECT COUNT(*) AS total FROM \`${PRODUCTS_TABLE}\` ${whereClause}`,
+      searchParams
+    );
 
     const mappedRows = (rows || []).map((row) => ({
       ...row,
@@ -98,18 +119,25 @@ app.get('/api/products', async(req,res)=>{
       product_link: row.product_link ?? '',
     }));
 
-    res.json(mappedRows);
+    res.json({ items: mappedRows, total: Number(totalRows[0]?.total ?? 0), page, limit });
   }catch(e){
     console.error('Products Error:', e.message || e);
     res.status(500).json({ error:'Failed to fetch products: ' + (e.message || 'Unknown error') });
   }
 });
 
-// Get categories (distinct categories with counts)
+// Get categories from the Products table with product and stock totals.
 app.get('/api/categories', async (req, res) => {
   try {
     const [rows] = await pool.query(
-      `SELECT Category AS id, Category AS name, COUNT(*) AS count FROM \`${PRODUCTS_TABLE}\` GROUP BY Category ORDER BY count DESC`
+      `SELECT
+        COALESCE(NULLIF(TRIM(Category), ''), 'Uncategorized') AS id,
+        COALESCE(NULLIF(TRIM(Category), ''), 'Uncategorized') AS name,
+        COUNT(*) AS count,
+        COALESCE(SUM(Stock), 0) AS stock_total
+      FROM \`${PRODUCTS_TABLE}\`
+      GROUP BY COALESCE(NULLIF(TRIM(Category), ''), 'Uncategorized')
+      ORDER BY count DESC, name ASC`
     );
     res.json(rows);
   } catch (err) {
@@ -213,7 +241,7 @@ app.delete('/api/products/:id', async (req, res) => {
       return res.status(404).json({ error: 'Product not found' });
     }
 
-    res.json({ success: true });
+    res.json({ success: true, message: 'Product deleted successfully' });
   } catch (err) {
     console.error('Delete Product Error:', err.message || err);
     res.status(500).json({ error: 'Failed to delete product: ' + (err.message || 'Unknown error') });

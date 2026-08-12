@@ -34,10 +34,12 @@ export default function ProductCard({
   product,
   onEdit,
   onDelete,
+  isDeleting = false,
 }: {
   product: Product;
   onEdit?: (product: Product) => void;
   onDelete?: (product: Product) => void;
+  isDeleting?: boolean;
 }) {
   const cat = CATEGORY_STYLE[product.category];
   const derivedStatus = getProductStatus(product.stock);
@@ -90,13 +92,18 @@ export default function ProductCard({
               </Text>
             </View>
             {onEdit ? (
-              <Pressable style={styles.editButton} onPress={() => onEdit(product)} hitSlop={6}>
+              <Pressable style={styles.editButton} onPress={() => onEdit(product)} hitSlop={6} disabled={isDeleting}>
                 <Text style={styles.editButtonText}>✏️</Text>
               </Pressable>
             ) : null}
             {onDelete ? (
-              <Pressable style={styles.deleteButton} onPress={handleDeletePress} hitSlop={6}>
-                <Text style={styles.deleteButtonText}>🗑️</Text>
+              <Pressable
+                style={[styles.deleteButton, isDeleting && styles.deleteButtonDisabled]}
+                onPress={handleDeletePress}
+                hitSlop={6}
+                disabled={isDeleting}
+              >
+                <Text style={styles.deleteButtonText}>{isDeleting ? '…' : '🗑️'}</Text>
               </Pressable>
             ) : null}
           </View>
@@ -198,6 +205,9 @@ const styles = StyleSheet.create({
   },
   deleteButtonText: {
     fontSize: 11,
+  },
+  deleteButtonDisabled: {
+    opacity: 0.55,
   },
   productMeta: {
     fontSize: 11,
