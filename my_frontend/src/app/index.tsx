@@ -63,6 +63,7 @@ export default function HomeScreen() {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const [activeTab, setActiveTab] = useState<string>('home');
   const [drawerVisible, setDrawerVisible] = useState(false);
@@ -117,7 +118,22 @@ export default function HomeScreen() {
       });
   }
 
-      const lowStockCount = products.filter((p) => getProductStatus(p.stock) !== 'In Stock').length;
+  const normalizedSearchQuery = searchQuery.trim().toLocaleLowerCase();
+  const filteredProducts = products.filter((product) => {
+    if (!normalizedSearchQuery) return true;
+
+    return [
+      product.id,
+      product.name,
+      product.category,
+      product.details,
+      product.color,
+      product.size,
+      product.location_text,
+    ].some((value) => String(value ?? '').toLocaleLowerCase().includes(normalizedSearchQuery));
+  });
+
+  const lowStockCount = products.filter((p) => getProductStatus(p.stock) !== 'In Stock').length;
 
   function openDrawer() {
     setDrawerVisible(true);
@@ -168,7 +184,17 @@ export default function HomeScreen() {
               placeholder="Search products, SKU..."
               placeholderTextColor="rgba(255,255,255,0.5)"
               style={styles.searchInput}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              autoCapitalize="none"
+              autoCorrect={false}
+              returnKeyType="search"
             />
+            {searchQuery ? (
+              <Pressable onPress={() => setSearchQuery('')} hitSlop={8} accessibilityLabel="Clear search">
+                <Text style={styles.clearSearch}>×</Text>
+              </Pressable>
+            ) : null}
           </View>
 
           <View style={styles.statRow}>
@@ -207,8 +233,9 @@ export default function HomeScreen() {
           <CategoriesScreen />
         ) : activeTab === 'products' ? (
           <ProductsScreen
-            products={products}
+            products={filteredProducts}
             isLoading={isLoading}
+            searchQuery={searchQuery}
             renderItem={({ item }: any) => (
               <ProductCard
                 product={item}
@@ -235,12 +262,18 @@ export default function HomeScreen() {
             contentContainerStyle={styles.recentList}
             showsVerticalScrollIndicator={false}
           >
-            {products.slice(0, RECENT_PRODUCTS_LIMIT).map((item) => (
+            {filteredProducts.slice(0, RECENT_PRODUCTS_LIMIT).map((item) => (
               <ProductCard
                 key={item.id}
                 product={item}
               />
             ))}
+            {filteredProducts.length === 0 ? (
+              <View style={styles.homeEmptyState}>
+                <Text style={styles.homeEmptyTitle}>No products found</Text>
+                <Text style={styles.homeEmptyText}>Try a different product name or SKU.</Text>
+              </View>
+            ) : null}
           </ScrollView>
         )}
 
@@ -402,6 +435,13 @@ const styles = StyleSheet.create({
     fontSize: 13,
     flex: 1,
   },
+  clearSearch: {
+    color: '#FFFFFF',
+    fontSize: 24,
+    fontWeight: '300',
+    lineHeight: 20,
+    paddingLeft: 8,
+  },
   statRow: {
     flexDirection: 'row',
     gap: 12,
@@ -449,6 +489,20 @@ const styles = StyleSheet.create({
     paddingTop: 4,
     paddingBottom: 16,
     gap: 12,
+  },
+  homeEmptyState: {
+    alignItems: 'center',
+    paddingTop: 48,
+  },
+  homeEmptyTitle: {
+    color: '#1B2A4A',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  homeEmptyText: {
+    color: '#64748B',
+    fontSize: 13,
+    marginTop: 6,
   },
   bottomNav: {
     flexDirection: 'row',
