@@ -120,9 +120,9 @@ app.get('/api/products', async(req,res)=>{
     }));
 
     res.json({ items: mappedRows, total: Number(totalRows[0]?.total ?? 0), page, limit });
-  }catch(e){
+  } catch (e) {
     console.error('Products Error:', e.message || e);
-    res.status(500).json({ error:'Failed to fetch products: ' + (e.message || 'Unknown error') });
+    res.status(500).json({ error: 'Failed to fetch products: ' + (e.message || 'Unknown error') });
   }
 });
 
@@ -248,7 +248,7 @@ app.delete('/api/products/:id', async (req, res) => {
   }
 });
 
-app.listen(port,'0.0.0.0',()=>{
+app.listen(port, '0.0.0.0', () => {
   console.log(`🚀 API running on port ${port}`);
 });
 app.get("/api", (req, res) => {
