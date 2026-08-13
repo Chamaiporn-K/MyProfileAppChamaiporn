@@ -2,9 +2,12 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const mysql = require('mysql2/promise');
+const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
 
 const app = express();
 const port = process.env.PORT || 3012;
+const JWT_SECRET = process.env.JWT_SECRET || 'mysecretkey';
 
 app.use(cors());
 app.use(express.json({ limit: '15mb' }));
@@ -36,11 +39,55 @@ function isUnknownColumn(err) {
   return err && (err.code === 'ER_BAD_FIELD_ERROR' || err.errno === 1054);
 }
 
+function createToken(user) {
+  return jwt.sign(
+    {
+      sub: user.user_id,
+      username: user.username,
+      role: user.role || 'user',
+    },
+    JWT_SECRET,
+    { expiresIn: '7d' }
+  );
+}
+
+function requireAuth(req, res, next) {
+  const authHeader = req.headers.authorization || '';
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+
+  if (!token) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+
+  try {
+    const payload = jwt.verify(token, JWT_SECRET);
+    req.user = payload;
+    next();
+  } catch (err) {
+    return res.status(401).json({ error: 'Invalid or expired token' });
+  }
+}
+
+async function ensureAuthTables() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS users (
+      user_id INT NOT NULL AUTO_INCREMENT,
+      username VARCHAR(100) NOT NULL UNIQUE,
+      password VARCHAR(255) NOT NULL,
+      email VARCHAR(255) NULL,
+      role ENUM('user', 'admin') NOT NULL DEFAULT 'user',
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (user_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+}
+
 (async function testMySQL(){
   try{
     const conn = await pool.getConnection();
     console.log('Connected to MySQL:', process.env.DB_NAME);
     conn.release();
+    await ensureAuthTables();
   }catch(err){
     console.error('MySQL Failed:', err);
     if (err && err.stack) console.error(err.stack);
@@ -48,8 +95,113 @@ function isUnknownColumn(err) {
   }
 })();
 
+app.post('/api/auth/register', async (req, res) => {
+  try {
+    const username = String(req.body?.username ?? '').trim();
+    const password = String(req.body?.password ?? '');
+
+    if (!username || !password) {
+      return res.status(400).json({ error: 'Username and password are required' });
+    }
+
+    if (username.length < 3 || password.length < 5) {
+      return res.status(400).json({ error: 'Username must be at least 3 chars and password at least 5 chars' });
+    }
+
+    const [existing] = await pool.query('SELECT user_id FROM users WHERE username = ? LIMIT 1', [username]);
+    if (existing.length > 0) {
+      return res.status(409).json({ error: 'Username already exists' });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const [result] = await pool.query(
+      'INSERT INTO users (username, password, email, role) VALUES (?, ?, NULL, ?)',
+      [username, hashedPassword, 'user']
+    );
+
+    const user = {
+      user_id: result.insertId,
+      username,
+      role: 'user',
+    };
+
+    res.status(201).json({
+      message: 'User registered successfully',
+      token: createToken(user),
+      user,
+    });
+  } catch (err) {
+    console.error('Register Error:', err.message || err);
+    res.status(500).json({ error: 'Failed to register user: ' + (err.message || 'Unknown error') });
+  }
+});
+
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const username = String(req.body?.username ?? '').trim();
+    const password = String(req.body?.password ?? '');
+
+    if (!username || !password) {
+      return res.status(400).json({ error: 'Username and password are required' });
+    }
+
+    const [rows] = await pool.query(
+      'SELECT user_id, username, password, role FROM users WHERE username = ? LIMIT 1',
+      [username]
+    );
+
+    const user = rows[0];
+    if (!user) {
+      return res.status(401).json({ error: 'Invalid username or password' });
+    }
+
+    const isValid = await bcrypt.compare(password, user.password);
+    if (!isValid) {
+      return res.status(401).json({ error: 'Invalid username or password' });
+    }
+
+    const safeUser = {
+      user_id: user.user_id,
+      username: user.username,
+      role: user.role || 'user',
+    };
+
+    res.json({
+      message: 'Login successful',
+      token: createToken(safeUser),
+      user: safeUser,
+    });
+  } catch (err) {
+    console.error('Login Error:', err.message || err);
+    res.status(500).json({ error: 'Failed to login: ' + (err.message || 'Unknown error') });
+  }
+});
+
+app.get('/api/auth/me', requireAuth, async (req, res) => {
+  try {
+    const [rows] = await pool.query(
+      'SELECT user_id, username, role, email, created_at FROM users WHERE user_id = ? LIMIT 1',
+      [req.user.sub]
+    );
+
+    const user = rows[0];
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    res.json({ user });
+  } catch (err) {
+    console.error('Auth Me Error:', err.message || err);
+    res.status(500).json({ error: 'Failed to load user: ' + (err.message || 'Unknown error') });
+  }
+});
+
+app.post('/api/auth/logout', (req, res) => {
+  res.json({ success: true, message: 'Logged out successfully' });
+});
+
 // Get products (optionally searched and paginated).
-app.get('/api/products', async(req,res)=>{
+app.get('/api/products', requireAuth, async(req,res)=>{
   try{
     const query = String(req.query.q ?? '').trim();
     const parsedPage = Number.parseInt(String(req.query.page ?? '1'), 10);

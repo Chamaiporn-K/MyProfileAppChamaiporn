@@ -20,7 +20,7 @@ import CategoriesScreen from './categories';
 import LocationsScreen from './locations';
 import ProductsScreen from './products';
 import ProductCard, { Product } from './productcard';
-import { apiCall } from '../lib/api';
+import { apiCall, clearAuthSession, loadAuthToken, setAuthToken } from '../lib/api';
 import { getProductStatus } from '../lib/product-status';
 
 const RECENT_PRODUCTS_LIMIT = 4;
@@ -39,6 +39,86 @@ const DRAWER_ITEMS = [
   { key: 'locations', label: 'Location (Warehouse)' },
 ] as const;
 const DRAWER_WIDTH = Math.min(280, Dimensions.get('window').width * 0.78);
+
+type AuthMode = 'login' | 'signup';
+
+function AuthScreen({
+  mode,
+  onModeChange,
+  onLogin,
+  onSignup,
+}: {
+  mode: AuthMode;
+  onModeChange: (next: AuthMode) => void;
+  onLogin: (username: string, password: string) => Promise<void>;
+  onSignup: (username: string, password: string, confirmPassword: string) => Promise<void>;
+}) {
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleSubmit = async () => {
+    setIsSubmitting(true);
+    try {
+      if (mode === 'login') {
+        await onLogin(username.trim(), password);
+      } else {
+        await onSignup(username.trim(), password, confirmPassword);
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <View style={styles.authContainer}>
+      <View style={styles.authCard}>
+        <Text style={styles.authTitle}>{mode === 'login' ? 'Welcome back' : 'Create account'}</Text>
+        <Text style={styles.authSubtitle}>
+          {mode === 'login' ? 'Sign in with your username and password.' : 'Create a new username and secure password.'}
+        </Text>
+
+        <TextInput
+          value={username}
+          onChangeText={setUsername}
+          placeholder="Username"
+          autoCapitalize="none"
+          autoCorrect={false}
+          style={styles.authInput}
+        />
+
+        <TextInput
+          value={password}
+          onChangeText={setPassword}
+          placeholder="Password"
+          secureTextEntry
+          style={styles.authInput}
+        />
+
+        {mode === 'signup' ? (
+          <TextInput
+            value={confirmPassword}
+            onChangeText={setConfirmPassword}
+            placeholder="Confirm password"
+            secureTextEntry
+            style={styles.authInput}
+          />
+        ) : null}
+
+        <Pressable style={[styles.authButton, isSubmitting && styles.authButtonDisabled]} onPress={handleSubmit} disabled={isSubmitting}>
+          <Text style={styles.authButtonText}>{isSubmitting ? 'Please wait...' : mode === 'login' ? 'Sign in' : 'Sign up'}</Text>
+        </Pressable>
+
+        <Pressable onPress={() => onModeChange(mode === 'login' ? 'signup' : 'login')}>
+          <Text style={styles.authToggleText}>
+            {mode === 'login' ? "Don't have an account? Sign up" : 'Already have an account? Sign in'}
+          </Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
 
 function ThaiPatternOverlay() {
   return (
@@ -64,18 +144,109 @@ function StatCard({ label, value, fg, bg }: { label: string; value: number; fg: 
 }
 
 export default function HomeScreen() {
-
+  const [sessionUser, setSessionUser] = useState<any>(null);
+  const [authMode, setAuthMode] = useState<AuthMode>('login');
+  const [authReady, setAuthReady] = useState(false);
   const [products, setProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [deletingProductId, setDeletingProductId] = useState<string | null>(null);
-
   const [activeTab, setActiveTab] = useState<string>('home');
   const [drawerVisible, setDrawerVisible] = useState(false);
   const slideAnim = useRef(new Animated.Value(-DRAWER_WIDTH)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const restoreSession = async () => {
+      try {
+        const token = await loadAuthToken();
+        if (!token) {
+          setAuthReady(true);
+          return;
+        }
+
+        const userData = await apiCall('/auth/me');
+        setSessionUser(userData?.user ?? null);
+      } catch {
+        await clearAuthSession();
+        setSessionUser(null);
+      } finally {
+        setAuthReady(true);
+      }
+    };
+
+    restoreSession();
+  }, []);
+
+  const handleLogin = async (username: string, password: string) => {
+    if (!username || !password) {
+      Alert.alert('Validation', 'Username and password are required.');
+      return;
+    }
+
+    try {
+      const response = await apiCall('/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ username, password }),
+      });
+
+      await setAuthToken(response?.token ?? null);
+      setSessionUser(response?.user ?? null);
+    } catch (error: any) {
+      Alert.alert('Sign in failed', error?.message || 'Unable to sign in.');
+    }
+  };
+
+  const handleSignup = async (username: string, password: string, confirmPassword: string) => {
+    if (!username || !password) {
+      Alert.alert('Validation', 'Username and password are required.');
+      return;
+    }
+
+    if (password.length < 5) {
+      Alert.alert('Validation', 'Password must be at least 5 characters long.');
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      Alert.alert('Validation', 'Passwords do not match.');
+      return;
+    }
+
+    try {
+      const response = await apiCall('/auth/register', {
+        method: 'POST',
+        body: JSON.stringify({ username, password }),
+      });
+
+      await setAuthToken(response?.token ?? null);
+      setSessionUser(response?.user ?? null);
+    } catch (error: any) {
+      Alert.alert('Sign up failed', error?.message || 'Unable to create account.');
+    }
+  };
+
+  if (!authReady) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#1B2A4A" />
+        <Text style={styles.loadingText}>Loading session...</Text>
+      </View>
+    );
+  }
+
+  if (!sessionUser) {
+    return (
+      <AuthScreen
+        mode={authMode}
+        onModeChange={setAuthMode}
+        onLogin={handleLogin}
+        onSignup={handleSignup}
+      />
+    );
+  }
 
   function loadProducts(query = searchQuery) {
     setIsLoading(true);
@@ -333,7 +504,14 @@ export default function HomeScreen() {
                 ))}
               </View>
 
-              <Pressable onPress={closeDrawer} style={styles.drawerLogout}>
+              <Pressable
+                onPress={async () => {
+                  await clearAuthSession();
+                  setSessionUser(null);
+                  closeDrawer();
+                }}
+                style={styles.drawerLogout}
+              >
                 <Text style={styles.drawerLogoutText}>Log out</Text>
               </Pressable>
             </SafeAreaView>
@@ -345,6 +523,78 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F5F7FB',
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: '#334155',
+  },
+  authContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F5F7FB',
+    padding: 24,
+  },
+  authCard: {
+    width: '100%',
+    maxWidth: 420,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    padding: 24,
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 18,
+    elevation: 6,
+  },
+  authTitle: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#1B2A4A',
+    marginBottom: 8,
+  },
+  authSubtitle: {
+    fontSize: 14,
+    color: '#64748B',
+    marginBottom: 20,
+  },
+  authInput: {
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 15,
+    marginBottom: 12,
+    color: '#0F172A',
+  },
+  authButton: {
+    backgroundColor: '#1B2A4A',
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  authButtonDisabled: {
+    opacity: 0.7,
+  },
+  authButtonText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 15,
+  },
+  authToggleText: {
+    marginTop: 18,
+    textAlign: 'center',
+    color: '#1B2A4A',
+    fontWeight: '600',
+  },
   root: {
     flex: 1,
     backgroundColor: '#FAFAFB', 
