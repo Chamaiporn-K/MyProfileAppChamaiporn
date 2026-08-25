@@ -68,9 +68,12 @@ function requireAuth(req, res, next) {
   }
 }
 
+// Linux MySQL is case-sensitive — actual table name is `user` (singular)
+const USERS_TABLE = 'user';
+
 async function ensureAuthTables() {
   await pool.query(`
-    CREATE TABLE IF NOT EXISTS users (
+    CREATE TABLE IF NOT EXISTS \`${USERS_TABLE}\` (
       user_id INT NOT NULL AUTO_INCREMENT,
       username VARCHAR(100) NOT NULL UNIQUE,
       password VARCHAR(255) NOT NULL,
@@ -95,33 +98,46 @@ async function ensureAuthTables() {
   }
 })();
 
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 app.post('/api/auth/register', async (req, res) => {
   try {
     const username = String(req.body?.username ?? '').trim();
     const password = String(req.body?.password ?? '');
+    const email = String(req.body?.email ?? '').trim();
 
-    if (!username || !password) {
-      return res.status(400).json({ error: 'Username and password are required' });
+    if (!username || !password || !email) {
+      return res.status(400).json({ error: 'Username, password, and email are required' });
     }
 
     if (username.length < 3 || password.length < 5) {
       return res.status(400).json({ error: 'Username must be at least 3 chars and password at least 5 chars' });
     }
 
-    const [existing] = await pool.query('SELECT user_id FROM users WHERE username = ? LIMIT 1', [username]);
+    if (!EMAIL_PATTERN.test(email)) {
+      return res.status(400).json({ error: 'Please enter a valid email address' });
+    }
+
+    const [existing] = await pool.query(`SELECT user_id FROM \`${USERS_TABLE}\` WHERE username = ? LIMIT 1`, [username]);
     if (existing.length > 0) {
       return res.status(409).json({ error: 'Username already exists' });
     }
 
+    const [existingEmail] = await pool.query(`SELECT user_id FROM \`${USERS_TABLE}\` WHERE email = ? LIMIT 1`, [email]);
+    if (existingEmail.length > 0) {
+      return res.status(409).json({ error: 'Email already in use' });
+    }
+
     const hashedPassword = await bcrypt.hash(password, 10);
     const [result] = await pool.query(
-      'INSERT INTO users (username, password, email, role) VALUES (?, ?, NULL, ?)',
-      [username, hashedPassword, 'user']
+      `INSERT INTO \`${USERS_TABLE}\` (username, password, email, role) VALUES (?, ?, ?, ?)`,
+      [username, hashedPassword, email, 'user']
     );
 
     const user = {
       user_id: result.insertId,
       username,
+      email,
       role: 'user',
     };
 
@@ -146,7 +162,7 @@ app.post('/api/auth/login', async (req, res) => {
     }
 
     const [rows] = await pool.query(
-      'SELECT user_id, username, password, role FROM users WHERE username = ? LIMIT 1',
+      `SELECT user_id, username, password, role FROM \`${USERS_TABLE}\` WHERE username = ? LIMIT 1`,
       [username]
     );
 
@@ -180,7 +196,7 @@ app.post('/api/auth/login', async (req, res) => {
 app.get('/api/auth/me', requireAuth, async (req, res) => {
   try {
     const [rows] = await pool.query(
-      'SELECT user_id, username, role, email, created_at FROM users WHERE user_id = ? LIMIT 1',
+      `SELECT user_id, username, role, email, created_at FROM \`${USERS_TABLE}\` WHERE user_id = ? LIMIT 1`,
       [req.user.sub]
     );
 

@@ -47,15 +47,18 @@ function AuthScreen({
   onModeChange,
   onLogin,
   onSignup,
+  errorMessage,
 }: {
   mode: AuthMode;
   onModeChange: (next: AuthMode) => void;
   onLogin: (username: string, password: string) => Promise<void>;
-  onSignup: (username: string, password: string, confirmPassword: string) => Promise<void>;
+  onSignup: (username: string, password: string, confirmPassword: string, email: string) => Promise<void>;
+  errorMessage: string | null;
 }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [email, setEmail] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = async () => {
@@ -64,7 +67,7 @@ function AuthScreen({
       if (mode === 'login') {
         await onLogin(username.trim(), password);
       } else {
-        await onSignup(username.trim(), password, confirmPassword);
+        await onSignup(username.trim(), password, confirmPassword, email.trim());
       }
     } finally {
       setIsSubmitting(false);
@@ -98,6 +101,18 @@ function AuthScreen({
 
         {mode === 'signup' ? (
           <TextInput
+            value={email}
+            onChangeText={setEmail}
+            placeholder="Email"
+            keyboardType="email-address"
+            autoCapitalize="none"
+            autoCorrect={false}
+            style={styles.authInput}
+          />
+        ) : null}
+
+        {mode === 'signup' ? (
+          <TextInput
             value={confirmPassword}
             onChangeText={setConfirmPassword}
             placeholder="Confirm password"
@@ -109,6 +124,8 @@ function AuthScreen({
         <Pressable style={[styles.authButton, isSubmitting && styles.authButtonDisabled]} onPress={handleSubmit} disabled={isSubmitting}>
           <Text style={styles.authButtonText}>{isSubmitting ? 'Please wait...' : mode === 'login' ? 'Sign in' : 'Sign up'}</Text>
         </Pressable>
+
+        {errorMessage ? <Text style={styles.authError}>{errorMessage}</Text> : null}
 
         <Pressable onPress={() => onModeChange(mode === 'login' ? 'signup' : 'login')}>
           <Text style={styles.authToggleText}>
@@ -146,6 +163,7 @@ function StatCard({ label, value, fg, bg }: { label: string; value: number; fg: 
 export default function HomeScreen() {
   const [sessionUser, setSessionUser] = useState<any>(null);
   const [authMode, setAuthMode] = useState<AuthMode>('login');
+  const [authError, setAuthError] = useState<string | null>(null);
   const [authReady, setAuthReady] = useState(false);
   const [products, setProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -179,74 +197,6 @@ export default function HomeScreen() {
 
     restoreSession();
   }, []);
-
-  const handleLogin = async (username: string, password: string) => {
-    if (!username || !password) {
-      Alert.alert('Validation', 'Username and password are required.');
-      return;
-    }
-
-    try {
-      const response = await apiCall('/auth/login', {
-        method: 'POST',
-        body: JSON.stringify({ username, password }),
-      });
-
-      await setAuthToken(response?.token ?? null);
-      setSessionUser(response?.user ?? null);
-    } catch (error: any) {
-      Alert.alert('Sign in failed', error?.message || 'Unable to sign in.');
-    }
-  };
-
-  const handleSignup = async (username: string, password: string, confirmPassword: string) => {
-    if (!username || !password) {
-      Alert.alert('Validation', 'Username and password are required.');
-      return;
-    }
-
-    if (password.length < 5) {
-      Alert.alert('Validation', 'Password must be at least 5 characters long.');
-      return;
-    }
-
-    if (password !== confirmPassword) {
-      Alert.alert('Validation', 'Passwords do not match.');
-      return;
-    }
-
-    try {
-      const response = await apiCall('/auth/register', {
-        method: 'POST',
-        body: JSON.stringify({ username, password }),
-      });
-
-      await setAuthToken(response?.token ?? null);
-      setSessionUser(response?.user ?? null);
-    } catch (error: any) {
-      Alert.alert('Sign up failed', error?.message || 'Unable to create account.');
-    }
-  };
-
-  if (!authReady) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#1B2A4A" />
-        <Text style={styles.loadingText}>Loading session...</Text>
-      </View>
-    );
-  }
-
-  if (!sessionUser) {
-    return (
-      <AuthScreen
-        mode={authMode}
-        onModeChange={setAuthMode}
-        onLogin={handleLogin}
-        onSignup={handleSignup}
-      />
-    );
-  }
 
   function loadProducts(query = searchQuery) {
     setIsLoading(true);
@@ -282,10 +232,94 @@ export default function HomeScreen() {
       });
   }
 
+  // IMPORTANT: this effect must stay above the early `return`s below so that
+  // the same number/order of hooks runs on every render (logged-in or not).
   useEffect(() => {
+    if (!sessionUser) return;
     const timer = setTimeout(() => loadProducts(searchQuery), 300);
     return () => clearTimeout(timer);
-  }, [searchQuery]);
+  }, [searchQuery, sessionUser]);
+
+  const handleLogin = async (username: string, password: string) => {
+    setAuthError(null);
+    if (!username || !password) {
+      setAuthError('Username and password are required.');
+      return;
+    }
+
+    try {
+      const response = await apiCall('/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ username, password }),
+      });
+
+      await setAuthToken(response?.token ?? null);
+      setSessionUser(response?.user ?? null);
+    } catch (error: any) {
+      const message = error?.message || 'Unable to sign in.';
+      setAuthError(message);
+      Alert.alert('Sign in failed', message);
+    }
+  };
+
+  const handleSignup = async (username: string, password: string, confirmPassword: string, email: string) => {
+    setAuthError(null);
+    if (!username || !password || !email) {
+      setAuthError('Username, password, and email are required.');
+      return;
+    }
+
+    const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailPattern.test(email)) {
+      setAuthError('Please enter a valid email address.');
+      return;
+    }
+
+    if (password.length < 5) {
+      setAuthError('Password must be at least 5 characters long.');
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      setAuthError('Passwords do not match.');
+      return;
+    }
+
+    try {
+      const response = await apiCall('/auth/register', {
+        method: 'POST',
+        body: JSON.stringify({ username, password, email }),
+      });
+
+      await setAuthToken(response?.token ?? null);
+      setSessionUser(response?.user ?? null);
+    } catch (error: any) {
+      const message = error?.message || 'Unable to create account.';
+      setAuthError(message);
+      Alert.alert('Sign up failed', message);
+    }
+  };
+
+  if (!authReady) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#1B2A4A" />
+        <Text style={styles.loadingText}>Loading session...</Text>
+      </View>
+    );
+  }
+
+  if (!sessionUser) {
+    return (
+      <AuthScreen
+        mode={authMode}
+        onModeChange={setAuthMode}
+        onLogin={handleLogin}
+        onSignup={handleSignup}
+        errorMessage={authError}
+      />
+    );
+  }
 
   function handleDeleteProduct(product: Product) {
     setDeletingProductId(product.id);
@@ -588,6 +622,12 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '700',
     fontSize: 15,
+  },
+  authError: {
+    marginTop: 12,
+    textAlign: 'center',
+    color: '#C53030',
+    fontSize: 14,
   },
   authToggleText: {
     marginTop: 18,
