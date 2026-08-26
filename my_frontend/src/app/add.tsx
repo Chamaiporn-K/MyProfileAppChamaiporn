@@ -38,6 +38,7 @@ type AddProductScreenProps = {
   product?: EditableProduct | null;
   onSuccess?: () => void;
   onCancel?: () => void;
+  isAdmin?: boolean;
 };
 
 export default function AddProductScreen({
@@ -45,8 +46,31 @@ export default function AddProductScreen({
   product = null,
   onSuccess,
   onCancel,
+  isAdmin = false,
 }: AddProductScreenProps) {
   const isEditMode = !!product;
+
+  // Second layer of defense: even if a parent forgets to gate navigation,
+  // this screen refuses to render the form for a non-admin session. The
+  // backend still enforces this on every write — this is UI-only.
+  if (!isAdmin) {
+    return (
+      <SafeAreaView style={styles.root} edges={['bottom']}>
+        <View style={styles.accessDeniedWrap}>
+          <Text style={styles.accessDeniedTitle}>Access denied</Text>
+          <Text style={styles.accessDeniedText}>
+            You need an admin account to {isEditMode ? 'edit' : 'add'} products.
+          </Text>
+          {onCancel ? (
+            <Pressable style={styles.cancelButton} onPress={onCancel}>
+              <Text style={styles.cancelButtonText}>Go back</Text>
+            </Pressable>
+          ) : null}
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   const initialCategories = Array.from(
     new Set([...DEFAULT_CATEGORIES, ...existingCategories, ...(product?.category ? [product.category] : [])])
   );
@@ -405,6 +429,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   cancelButtonText: { color: '#94A3B8', fontWeight: '600', fontSize: 13 },
+  accessDeniedWrap: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  accessDeniedTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1B2A4A',
+  },
+  accessDeniedText: {
+    marginTop: 8,
+    fontSize: 13,
+    color: '#64748B',
+    textAlign: 'center',
+  },
   chipRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',

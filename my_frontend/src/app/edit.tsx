@@ -6,6 +6,7 @@ type EditProductScreenProps = {
   existingCategories?: string[];
   onSuccess?: () => void;
   onCancel?: () => void;
+  isAdmin?: boolean;
 };
 
 export default function EditProductScreen({
@@ -13,6 +14,7 @@ export default function EditProductScreen({
   existingCategories = [],
   onSuccess,
   onCancel,
+  isAdmin = false,
 }: EditProductScreenProps) {
   return (
     <AddProductScreen
@@ -20,6 +22,7 @@ export default function EditProductScreen({
       existingCategories={existingCategories}
       onSuccess={onSuccess}
       onCancel={onCancel}
+      isAdmin={isAdmin}
     />
   );
 }

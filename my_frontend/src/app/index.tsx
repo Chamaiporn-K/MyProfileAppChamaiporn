@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -19,7 +19,7 @@ import EditProductScreen from './edit';
 import CategoriesScreen from './categories';
 import LocationsScreen from './locations';
 import ProductsScreen from './products';
-import ProductCard, { Product } from './productcard';
+import ProductCard, { Product, STATUS_STYLE } from './productcard';
 import { apiCall, clearAuthSession, loadAuthToken, setAuthToken } from '../lib/api';
 import { getProductStatus } from '../lib/product-status';
 
@@ -160,6 +160,69 @@ function StatCard({ label, value, fg, bg }: { label: string; value: number; fg: 
   );
 }
 
+const STOCK_STATUS_ROWS: { key: 'In Stock' | 'Low Stock' | 'Out of Stock'; label: string }[] = [
+  { key: 'In Stock', label: 'In Stock' },
+  { key: 'Low Stock', label: 'Low Stock' },
+  { key: 'Out of Stock', label: 'Out of Stock' },
+];
+
+function StockStatusChart({ products }: { products: Product[] }) {
+  const counts = useMemo(() => {
+    const c: Record<string, number> = { 'In Stock': 0, 'Low Stock': 0, 'Out of Stock': 0 };
+    products.forEach((p) => {
+      const status = getProductStatus(p.stock);
+      c[status] = (c[status] ?? 0) + 1;
+    });
+    return c;
+  }, [products]);
+
+  const total = products.length;
+
+  return (
+    <View style={styles.dashboardCard}>
+      <Text style={styles.dashboardTitle}>Stock Overview</Text>
+
+      {total === 0 ? (
+        <Text style={styles.dashboardEmptyText}>No products yet — add some to see the breakdown.</Text>
+      ) : (
+        <>
+          <View style={styles.stackedBar}>
+            {STOCK_STATUS_ROWS.map(({ key }) => {
+              const count = counts[key] ?? 0;
+              if (!count) return null;
+              const pct = (count / total) * 100;
+              return (
+                <View
+                  key={key}
+                  style={{ width: `${pct}%`, backgroundColor: STATUS_STYLE[key].fg }}
+                />
+              );
+            })}
+          </View>
+
+          <View style={styles.dashboardLegend}>
+            {STOCK_STATUS_ROWS.map(({ key, label }) => {
+              const count = counts[key] ?? 0;
+              const pct = total ? Math.round((count / total) * 100) : 0;
+              return (
+                <View key={key} style={styles.legendRow}>
+                  <View style={styles.legendLeft}>
+                    <View style={[styles.legendDot, { backgroundColor: STATUS_STYLE[key].fg }]} />
+                    <Text style={styles.legendLabel}>{label}</Text>
+                  </View>
+                  <Text style={styles.legendValue}>
+                    {count} · {pct}%
+                  </Text>
+                </View>
+              );
+            })}
+          </View>
+        </>
+      )}
+    </View>
+  );
+}
+
 export default function HomeScreen() {
   const [sessionUser, setSessionUser] = useState<any>(null);
   const [authMode, setAuthMode] = useState<AuthMode>('login');
@@ -173,6 +236,7 @@ export default function HomeScreen() {
   const [deletingProductId, setDeletingProductId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<string>('home');
   const [drawerVisible, setDrawerVisible] = useState(false);
+  const isAdmin = sessionUser?.role === 'admin';
   const slideAnim = useRef(new Animated.Value(-DRAWER_WIDTH)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
@@ -418,13 +482,19 @@ export default function HomeScreen() {
           </View>
         ) : null}
 
-        {/* Simple tab routing using activeTab state */}
+        {/* Simple tab routing using activeTab state.
+            AddProductScreen/EditProductScreen self-gate on isAdmin (see add.tsx),
+            so this is passing the prop through, not the only line of defense. */}
         {activeTab === 'add' ? (
-          <AddProductScreen existingCategories={Array.from(new Set(products.map((p) => p.category)))} />
+          <AddProductScreen
+            existingCategories={Array.from(new Set(products.map((p) => p.category)))}
+            isAdmin={isAdmin}
+          />
         ) : activeTab === 'edit' && editingProduct ? (
           <EditProductScreen
             product={editingProduct}
             existingCategories={Array.from(new Set(products.map((p) => p.category)))}
+            isAdmin={isAdmin}
             onSuccess={() => {
               setEditingProduct(null);
               setActiveTab('products');
@@ -447,11 +517,16 @@ export default function HomeScreen() {
             renderItem={({ item }: any) => (
               <ProductCard
                 product={item}
-                onEdit={(p) => {
-                  setEditingProduct(p);
-                  setActiveTab('edit');
-                }}
-                onDelete={handleDeleteProduct}
+                isAdmin={isAdmin}
+                onEdit={
+                  isAdmin
+                    ? (p) => {
+                        setEditingProduct(p);
+                        setActiveTab('edit');
+                      }
+                    : undefined
+                }
+                onDelete={isAdmin ? handleDeleteProduct : undefined}
                 isDeleting={deletingProductId === item.id}
               />
             )}
@@ -475,6 +550,7 @@ export default function HomeScreen() {
               <ProductCard
                 key={item.id}
                 product={item}
+                isAdmin={isAdmin}
               />
             ))}
             {products.length === 0 ? (
@@ -483,11 +559,13 @@ export default function HomeScreen() {
                 <Text style={styles.homeEmptyText}>Try a different product name or SKU.</Text>
               </View>
             ) : null}
+
+            <StockStatusChart products={products} />
           </ScrollView>
         )}
 
         <View style={styles.bottomNav}>
-          {NAV_ITEMS.map(({ key, label, emoji }) => {
+          {NAV_ITEMS.filter((item) => item.key !== 'add' || isAdmin).map(({ key, label, emoji }) => {
             const isActive = activeTab === key;
             return (
               <Pressable
@@ -803,6 +881,65 @@ const styles = StyleSheet.create({
     color: '#64748B',
     fontSize: 13,
     marginTop: 6,
+  },
+  dashboardCard: {
+    marginTop: 8,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+    shadowColor: '#0F172A',
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
+  },
+  dashboardTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#1E293B',
+    marginBottom: 12,
+  },
+  dashboardEmptyText: {
+    fontSize: 12,
+    color: '#94A3B8',
+  },
+  stackedBar: {
+    flexDirection: 'row',
+    height: 12,
+    borderRadius: 999,
+    overflow: 'hidden',
+    backgroundColor: '#F1F5F9',
+  },
+  dashboardLegend: {
+    marginTop: 14,
+    gap: 10,
+  },
+  legendRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  legendLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  legendDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  legendLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  legendValue: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#1E293B',
   },
   bottomNav: {
     flexDirection: 'row',

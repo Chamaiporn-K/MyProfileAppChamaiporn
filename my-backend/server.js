@@ -216,6 +216,13 @@ app.post('/api/auth/logout', (req, res) => {
   res.json({ success: true, message: 'Logged out successfully' });
 });
 
+function requireAdmin(req, res, next) {
+  if (!req.user || req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+  next();
+}
+
 // Get products (optionally searched and paginated).
 app.get('/api/products', requireAuth, async(req,res)=>{
   try{
@@ -315,7 +322,7 @@ app.get('/api/categories', async (req, res) => {
 });
 
 // Add product
-app.post('/api/products', async (req, res) => {
+app.post('/api/products', requireAuth, requireAdmin, async (req, res) => {
   try {
     const body = req.body || {};
     const {
@@ -353,7 +360,7 @@ app.post('/api/products', async (req, res) => {
 });
 
 // Edit product
-app.put('/api/products/:id', async (req, res) => {
+app.put('/api/products/:id', requireAuth, requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     const body = req.body || {};
@@ -396,7 +403,7 @@ app.put('/api/products/:id', async (req, res) => {
 });
 
 // Delete product
-app.delete('/api/products/:id', async (req, res) => {
+app.delete('/api/products/:id', requireAuth, requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
 
