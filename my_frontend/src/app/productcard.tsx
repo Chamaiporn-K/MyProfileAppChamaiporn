@@ -49,9 +49,7 @@ export default function ProductCard({
   const displayStatus = derivedStatus;
   const [detailVisible, setDetailVisible] = useState(false);
 
-  // isAdmin is a second layer of defense on top of whatever the parent already
-  // decided — even if a parent forgets to omit onEdit/onDelete for a
-  // non-admin, the buttons stay hidden here.
+
   const canEdit = isAdmin && !!onEdit;
   const canDelete = isAdmin && !!onDelete;
 
@@ -61,8 +59,6 @@ export default function ProductCard({
     const message = `Are you sure you want to delete "${product.name}"? This cannot be undone.`;
 
     if (Platform.OS === 'web') {
-      // Alert.alert's multi-button dialog doesn't render on react-native-web,
-      // so on web we fall back to the browser's native confirm dialog.
       if (typeof window !== 'undefined' && window.confirm(message)) {
         onDelete(product);
       }
@@ -106,11 +102,6 @@ export default function ProductCard({
                   style={styles.editButton}
                   onPress={(e) => {
                     e.stopPropagation();
-                    // Defer to next tick: onEdit() switches tabs and unmounts
-                    // this whole list synchronously. Doing that inside the
-                    // same click dispatch that originated on a now-removed
-                    // descendant node crashes react-dom-web with a
-                    // "removeChild" NotFoundError.
                     setTimeout(() => onEdit!(product), 0);
                   }}
                   hitSlop={6}
@@ -217,9 +208,6 @@ export default function ProductCard({
                       style={styles.modalEditButton}
                       onPress={() => {
                         setDetailVisible(false);
-                        // Defer navigation to the next tick so the Modal has
-                        // fully unmounted before the parent list re-renders/
-                        // filters — avoids a DOM node race on web.
                         setTimeout(() => onEdit!(product), 0);
                       }}
                     >

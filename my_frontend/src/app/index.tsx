@@ -271,7 +271,6 @@ export default function HomeScreen() {
     apiCall(`/products?${params.toString()}`)
       .then((data) => {
         const rows = Array.isArray(data) ? data : Array.isArray(data?.items) ? data.items : [];
-        // Map DB columns (Productcode, Name, ...) to frontend Product shape
         const mapped: Product[] = rows.map((row: any) => ({
           id: String(row.id ?? row.Productcode ?? ''),
           name: row.name ?? row.Name ?? '',
@@ -296,8 +295,7 @@ export default function HomeScreen() {
       });
   }
 
-  // IMPORTANT: this effect must stay above the early `return`s below so that
-  // the same number/order of hooks runs on every render (logged-in or not).
+
   useEffect(() => {
     if (!sessionUser) return;
     const timer = setTimeout(() => loadProducts(searchQuery), 300);
@@ -482,9 +480,7 @@ export default function HomeScreen() {
           </View>
         ) : null}
 
-        {/* Simple tab routing using activeTab state.
-            AddProductScreen/EditProductScreen self-gate on isAdmin (see add.tsx),
-            so this is passing the prop through, not the only line of defense. */}
+
         {activeTab === 'add' ? (
           <AddProductScreen
             existingCategories={Array.from(new Set(products.map((p) => p.category)))}

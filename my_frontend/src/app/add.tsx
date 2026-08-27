@@ -50,9 +50,7 @@ export default function AddProductScreen({
 }: AddProductScreenProps) {
   const isEditMode = !!product;
 
-  // Second layer of defense: even if a parent forgets to gate navigation,
-  // this screen refuses to render the form for a non-admin session. The
-  // backend still enforces this on every write — this is UI-only.
+
   if (!isAdmin) {
     return (
       <SafeAreaView style={styles.root} edges={['bottom']}>

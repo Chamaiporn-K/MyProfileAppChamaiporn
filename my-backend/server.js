@@ -25,7 +25,7 @@ const pool = mysql.createPool({
   timezone: "+07:00"
 });
 
-// Linux MySQL is case-sensitive — actual table name is `Products`
+
 const PRODUCTS_TABLE = 'Products';
 
 function getComputedStatus(stock) {
@@ -68,7 +68,6 @@ function requireAuth(req, res, next) {
   }
 }
 
-// Linux MySQL is case-sensitive — actual table name is `user` (singular)
 const USERS_TABLE = 'user';
 
 async function ensureAuthTables() {
