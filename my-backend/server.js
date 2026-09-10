@@ -69,6 +69,7 @@ function requireAuth(req, res, next) {
 }
 
 const USERS_TABLE = 'user';
+const CLUSTERS_TABLE = 'ProductClusters';
 
 async function ensureAuthTables() {
   await pool.query(`
@@ -84,12 +85,31 @@ async function ensureAuthTables() {
   `);
 }
 
+async function ensureClusterTables() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS \`${CLUSTERS_TABLE}\` (
+      product_code VARCHAR(50) NOT NULL,
+      cluster_label VARCHAR(20) NOT NULL,
+      price DECIMAL(12, 2) NOT NULL,
+      monthly_sales INT NOT NULL DEFAULT 0,
+      clustered_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (product_code)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+
+  const [salesColumn] = await pool.query(`SHOW COLUMNS FROM \`${CLUSTERS_TABLE}\` LIKE 'monthly_sales'`);
+  if (salesColumn.length === 0) {
+    await pool.query(`ALTER TABLE \`${CLUSTERS_TABLE}\` ADD COLUMN monthly_sales INT NOT NULL DEFAULT 0 AFTER price`);
+  }
+}
+
 (async function testMySQL(){
   try{
     const conn = await pool.getConnection();
     console.log('Connected to MySQL:', process.env.DB_NAME);
     conn.release();
     await ensureAuthTables();
+    await ensureClusterTables();
   }catch(err){
     console.error('MySQL Failed:', err);
     if (err && err.stack) console.error(err.stack);
@@ -242,6 +262,7 @@ app.get('/api/products', requireAuth, async(req,res)=>{
         Name AS name,
         IFNULL(details, '') AS details,
         COALESCE(price, 0) AS price,
+        COALESCE(monthly_sales, 0) AS monthly_sales,
         IFNULL(color, '') AS color,
         IFNULL(size, '') AS size,
         Category AS category,
@@ -261,6 +282,7 @@ app.get('/api/products', requireAuth, async(req,res)=>{
         Name AS name,
         IFNULL(details, '') AS details,
         COALESCE(price, 0) AS price,
+        COALESCE(monthly_sales, 0) AS monthly_sales,
         IFNULL(color, '') AS color,
         IFNULL(size, '') AS size,
         Category AS category,
@@ -319,6 +341,71 @@ app.get('/api/categories', async (req, res) => {
   } catch (err) {
     console.error('Categories Error:', err.message || err);
     res.status(500).json({ error: 'Failed to fetch categories: ' + (err.message || 'Unknown error') });
+  }
+});
+
+// Return the most recently saved K-Means product clusters for the dashboard.
+app.get('/api/clusters', requireAuth, async (req, res) => {
+  try {
+    const [products] = await pool.query(
+      `SELECT product_code AS id, cluster_label AS cluster, price, monthly_sales, clustered_at
+       FROM \`${CLUSTERS_TABLE}\`
+       ORDER BY price ASC, product_code ASC`
+    );
+    const [clusters] = await pool.query(
+      `SELECT cluster_label AS cluster,
+              COUNT(*) AS product_count,
+              ROUND(AVG(price), 2) AS average_price,
+              MIN(price) AS min_price,
+              MAX(price) AS max_price
+              ,ROUND(AVG(monthly_sales), 2) AS average_monthly_sales
+              ,SUM(monthly_sales) AS total_monthly_sales
+       FROM \`${CLUSTERS_TABLE}\`
+       GROUP BY cluster_label
+       ORDER BY MIN(price) ASC`
+    );
+    const generatedAt = products[0]?.clustered_at ?? null;
+    res.json({ generated_at: generatedAt, clusters, products });
+  } catch (err) {
+    console.error('Clusters Read Error:', err.message || err);
+    res.status(500).json({ error: 'Failed to load cluster results.' });
+  }
+});
+
+// Replace saved clusters after the analysis script completes. Admin-only.
+app.post('/api/clusters', requireAuth, requireAdmin, async (req, res) => {
+  const items = Array.isArray(req.body?.products) ? req.body.products : [];
+  const validItems = items
+    .map((item) => ({
+      id: String(item?.id ?? '').trim(),
+      cluster: String(item?.cluster ?? '').trim().toLowerCase(),
+      price: Number(item?.price),
+      monthlySales: Number(item?.monthly_sales ?? 0),
+    }))
+    .filter((item) => item.id && ['low', 'medium', 'high'].includes(item.cluster) && Number.isFinite(item.price) && item.price > 0 && Number.isFinite(item.monthlySales) && item.monthlySales >= 0);
+
+  if (validItems.length === 0) {
+    return res.status(400).json({ error: 'No valid cluster results were provided.' });
+  }
+
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    await connection.beginTransaction();
+    await connection.query(`DELETE FROM \`${CLUSTERS_TABLE}\``);
+    await connection.query(
+      `INSERT INTO \`${CLUSTERS_TABLE}\` (product_code, cluster_label, price, monthly_sales, clustered_at)
+       VALUES ?`,
+      [validItems.map((item) => [item.id, item.cluster, item.price, item.monthlySales, new Date()])]
+    );
+    await connection.commit();
+    res.status(201).json({ success: true, saved: validItems.length });
+  } catch (err) {
+    if (connection) await connection.rollback();
+    console.error('Clusters Save Error:', err.message || err);
+    res.status(500).json({ error: 'Failed to save cluster results.' });
+  } finally {
+    if (connection) connection.release();
   }
 });
 

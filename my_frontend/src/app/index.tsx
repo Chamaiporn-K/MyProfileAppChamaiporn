@@ -19,6 +19,7 @@ import EditProductScreen from './edit';
 import CategoriesScreen from './categories';
 import LocationsScreen from './locations';
 import ProductsScreen from './products';
+import DashboardScreen from './dashboard';
 import ProductCard, { Product, STATUS_STYLE } from './productcard';
 import { apiCall, clearAuthSession, loadAuthToken, setAuthToken } from '../lib/api';
 import { getProductStatus } from '../lib/product-status';
@@ -27,6 +28,7 @@ const RECENT_PRODUCTS_LIMIT = 4;
 
 const NAV_ITEMS = [
   { key: 'home', label: 'Home', emoji: '🏠' },
+  { key: 'dashboard', label: 'Dashboard', emoji: '📊' },
   { key: 'add', label: 'Add', emoji: '➕' },
   { key: 'products', label: 'Products', emoji: '📦' },
   { key: 'categories', label: 'Categories', emoji: '🗂️' },
@@ -34,6 +36,7 @@ const NAV_ITEMS = [
 
 const DRAWER_ITEMS = [
   { key: 'home', label: 'Home' },
+  { key: 'dashboard', label: 'Dashboard' },
   { key: 'products', label: 'Products' },
   { key: 'categories', label: 'Categories' },
   { key: 'locations', label: 'Location (Warehouse)' },
@@ -413,7 +416,7 @@ export default function HomeScreen() {
     ]).start(() => setDrawerVisible(false));
   }
 
-  function navigateFromDrawer(tab: 'home' | 'products' | 'categories' | 'locations') {
+  function navigateFromDrawer(tab: 'home' | 'dashboard' | 'products' | 'categories' | 'locations') {
     setActiveTab(tab);
     closeDrawer();
   }
@@ -481,7 +484,9 @@ export default function HomeScreen() {
         ) : null}
 
 
-        {activeTab === 'add' ? (
+        {activeTab === 'dashboard' ? (
+          <DashboardScreen />
+        ) : activeTab === 'add' ? (
           <AddProductScreen
             existingCategories={Array.from(new Set(products.map((p) => p.category)))}
             isAdmin={isAdmin}

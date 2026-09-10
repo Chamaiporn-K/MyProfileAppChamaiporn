@@ -41,7 +41,12 @@ def load_products(api_url: str, token: str) -> pd.DataFrame:
     if products.empty:
         return products
     products["price"] = pd.to_numeric(products.get("price"), errors="coerce")
-    return products.loc[products["price"] > 0, ["id", "name", "category", "price"]].copy()
+    products["monthly_sales"] = (
+        pd.to_numeric(products["monthly_sales"], errors="coerce").fillna(0)
+        if "monthly_sales" in products.columns
+        else 0
+    )
+    return products.loc[products["price"] > 0, ["id", "name", "category", "price", "monthly_sales"]].copy()
 
 
 def get_login_token(api_url: str) -> str:
@@ -63,6 +68,18 @@ def get_login_token(api_url: str) -> str:
     if not token:
         raise ValueError("Login succeeded but did not return an authentication token.")
     return token
+
+
+def publish_results(api_url: str, token: str, result: dict) -> None:
+    """Save the finished clustering run through the backend for the app dashboard."""
+    clusters_url = api_url.rsplit("/products", 1)[0] + "/clusters"
+    response = requests.post(
+        clusters_url,
+        json={"products": result["products"]},
+        headers={"Authorization": f"Bearer {token}"},
+        timeout=15,
+    )
+    response.raise_for_status()
 
 
 def cluster_products(products: pd.DataFrame, requested_clusters: int) -> tuple[pd.DataFrame, list[dict]]:
@@ -98,6 +115,8 @@ def cluster_products(products: pd.DataFrame, requested_clusters: int) -> tuple[p
                 "average_price": round(float(group["price"].mean()), 2),
                 "min_price": float(group["price"].min()),
                 "max_price": float(group["price"].max()),
+                "average_monthly_sales": round(float(group["monthly_sales"].mean()), 2),
+                "total_monthly_sales": int(group["monthly_sales"].sum()),
             }
         )
     return products.drop(columns=["raw_cluster"]), summaries
@@ -112,12 +131,18 @@ def main() -> None:
         default=os.getenv("CLUSTERING_API_URL", DEFAULT_API_URL),
         help="Authenticated products endpoint.",
     )
+    parser.add_argument(
+        "--skip-publish",
+        action="store_true",
+        help="Only save the local JSON file; do not send results to the app API.",
+    )
     args = parser.parse_args()
 
     if args.clusters < 2:
         raise ValueError("--clusters must be at least 2.")
 
-    products = load_products(args.api_url, get_login_token(args.api_url))
+    token = get_login_token(args.api_url)
+    products = load_products(args.api_url, token)
     clustered, summaries = cluster_products(products, args.clusters)
     result = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -130,6 +155,9 @@ def main() -> None:
     args.output.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"Clustered {len(clustered)} products by price.")
     print(f"Saved results to {args.output}")
+    if not args.skip_publish:
+        publish_results(args.api_url, token, result)
+        print("Published results to the dashboard API.")
 
 
 if __name__ == "__main__":
