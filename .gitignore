@@ -1,0 +1,10 @@
+# Local environment configuration. Keep credentials out of Git.
+.env
+.env.*
+!.env.example
+
+# Dependency folders and local tool output.
+node_modules/
+.expo/
+dist/
+analysis/cluster_results.json
